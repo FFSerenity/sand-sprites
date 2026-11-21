@@ -36,3 +36,9 @@ All graphics and sounds are generated in code; the only image files are the app 
 
 ## Install on iPad
 Open the link in **Safari** → Share → **Add to Home Screen**. It runs full-screen and works offline after the first visit.
+
+## Performance
+The game watches its own frame times. If frames keep arriving late (for example during big firework rewards on an older iPad), it quietly steps down the canvas resolution and trims effect counts for the rest of the session.
+- `?fps` — shows a small frame-rate readout at the top (fps · render scale · quality level · particles · sprites)
+- `?hq` — keeps full quality, never steps down
+- `?rs=1.5` — forces a render scale
