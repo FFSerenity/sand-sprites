@@ -23,11 +23,11 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 | | Shape | Feel |
 |---|---|---|
 | 🏖️ Sand | little heap | rounds into a ball when picked up; drag two together to build a **sand castle**, tap the castle to crumble it back |
-| 🍮 Jelly | round, ears, horns… | see-through, wobbly, fruit inside; drag two colours together for a **layered rainbow jelly** |
-| 🧈 Butter | small block | fingerprints stay; **keep tapping and it melts** into a shiny puddle, then firms up again |
-| 🟢 Slime | droopy blob | stretchy; two slimes stick together with a gooey strand |
+| 🍮 Jelly | round, ears, horns… | see-through, wobbly, fruit inside; drag two together to merge — new colours make a **layered rainbow jelly** |
+| 🧈 Butter | small block | fingerprints stay, softens slowly in the sun; **drag it onto a sand sprite and the two knead into a slime** |
+| 🟢 Slime | droopy blob | matte modelling clay, keeps fingerprints; drag two together for a **marbled multi-colour clay** |
 | 🫧 Bubble | sphere | floats; squeeze it to **POP!**, then it drifts back together |
-| ☁️ Marshmallow | cylinder | memory-foam squish; drag two colours together for a **swirled marshmallow** |
+| ☁️ Marshmallow | cylinder | memory-foam squish; drag two together to merge — new colours make a **swirled marshmallow** |
 | 🧊 Ice | cube | slides far; **each tap cracks it**, the fifth shatters it into little cubes |
 | 🪩 Mercury | droplet | mirror surface; splits into droplets — **drag them together to merge**, bigger and bigger |
 

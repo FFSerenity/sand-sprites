@@ -335,7 +335,9 @@ varying vec2 vDisk; varying vec2 vFace; varying vec2 vCss;
 uniform vec3 uCol; uniform float uMat; uniform vec4 uDents[6]; uniform vec4 uSlot; uniform sampler2D uFace;
 uniform float uR; uniform vec4 uClip; uniform float uFaceOn; uniform vec4 uP; uniform float uSeed;
 uniform vec3 uCols[4]; uniform float uNCol;
-// several colours in bands (layered jelly, striped sand castle) or a swirl (cyc = 1, marshmallow)
+// several colours in bands (layered jelly, striped sand castle) or a swirl (cyc = 1, marshmallow, marbled clay)
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0 - 2.0*f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y); }
 vec3 multiCol(float t, float cyc){
   if (uNCol < 1.5) return uCol;
   vec3 c = vec3(0.0); float ws = 0.0, hw = 0.5/uNCol;
@@ -412,16 +414,22 @@ void main(){
     spec = vec3(pow(nh, mix(10.0, 70.0, melt)) * mix(0.22, 1.0, melt));
     col = mix(col, col*vec3(.38,.38,.55)+uCol*0.06, uNight*0.85);
   } else if (m < 3.5) {
-    // SLIME: thick, wet, semi-see-through, slow swirls and a little glitter
-    vec3 bg = sandAt(vCss + N.xy*uR*0.22);
-    float sw = sin(vFace.x*6.0 + sin(vFace.y*5.0 + uTime*1.3)*1.5 + uTime*0.7);
-    vec3 tint = uCol*(0.86 + 0.14*sw);
-    col = mix(bg*tint*1.15, tint*0.78, (1.0 - exp(-hz*3.5))*0.78);
-    vec2 gq = floor(vFace*uR/2.2 + uSeed*5.0);
-    col += step(0.982, hash(gq)) * (0.5 + 0.5*sin(uTime*3.0 + hash(gq+3.0)*30.0)) * 0.7;
-    col = mix(col, tint + 0.25, pow(1.0 - N.z, 2.2)*0.35);
-    spec = vec3(pow(nh, 90.0)*1.3 + pow(nh, 12.0)*0.12 + pow(max(dot(N, normalize(vec3(0.6,-0.2,0.8))),0.0), 60.0)*0.35);
-    col = mix(col, col*vec3(.45,.48,.7) + tint*0.5, uNight*0.85);
+    // SLIME as modelling clay: opaque and matte, soft lumpy surface, merged colours marble together, fingerprints stay
+    vec2 q = vFace * 1.15;
+    float sw = q.x*0.9 + q.y*0.55 + 0.34*sin(q.y*3.3 + uSeed*3.0) + 0.24*sin(q.x*4.6 - q.y*1.7 + uSeed*5.0) + 0.12*sin((q.x + q.y)*8.0 + uSeed);
+    vec3 bc = multiCol(fract(sw*0.75 + uSeed*0.13), 1.0);
+    vec2 np = vFace*uR/7.0 + uSeed*3.0;
+    float h0 = vnoise(np), hx = vnoise(np + vec2(0.4, 0.0)), hy = vnoise(np + vec2(0.0, 0.4));
+    vec3 Nc = normalize(N + vec3((h0 - hx)*0.55, (h0 - hy)*0.55, 0.0));
+    float wrap = max((dot(Nc, LIGHT) + 0.3)/1.3, 0.0);
+    col = bc * (0.50 + 0.60*wrap);
+    col += bc * 0.10 * pow(1.0 - hz, 1.5);
+    col *= 0.88 + 0.12*hz;
+    col *= 0.975 + 0.05*hash(floor(vFace*uR/1.1 + uSeed*9.0));
+    col *= 1.0 - 0.09*ridge;
+    col *= 1.0 - 0.16*clamp(dentSum, 0.0, 1.0);
+    spec = vec3(pow(max(dot(Nc, Hh), 0.0), 7.0)*0.07);
+    col = mix(col, col*vec3(.38,.4,.58) + bc*0.06, uNight*0.85);
   } else if (m < 4.5) {
     // BUBBLE: thin rainbow film you can see through
     vec3 bg = sandAt(vCss + N.xy*uR*0.08);
@@ -826,7 +834,7 @@ const MATS = {
   sand:   { id: 0, name: 'Sand',        ic: '🏖️', c: 'linear-gradient(180deg,#ffe3a8,#e2b064)', home: 330, edge: 700, area: 380, bend: 500, visc: 0.3,  damp: 10, inertia: 0.3,  pressK: 300,  pokeK: 0.45, follow: 18, grabK: 260, jump: 0.9,  dentDecay: 0.7,  dentW: 0.3,  friction: 8,   walk: 170, bob: 3,  arms: true,  size: 1.0 },
   jelly:  { id: 1, name: 'Jelly',       ic: '🍮', c: 'linear-gradient(180deg,#ffb3c8,#ff5d8f)', home: 85,  edge: 240, area: 520, bend: 260, visc: 0.14, damp: 2.3, inertia: 0.75, pressK: 1150, pokeK: 1.0, follow: 13, grabK: 170, jump: 1.15, dentDecay: 4.5,  dentW: 0.32, friction: 8,   walk: 230, bob: 12, arms: true,  size: 1.0 },
   butter: { id: 2, name: 'Butter',      ic: '🧈', c: 'linear-gradient(180deg,#fff2b0,#f2cf5c)', home: 150, edge: 520, area: 450, bend: 600, visc: 0.35, damp: 9,  inertia: 0.35, pressK: 900,  pokeK: 0.5,  follow: 16, grabK: 200, jump: 0.7,  dentDecay: 0.04, dentW: 0.24, friction: 6,   walk: 140, bob: 2,  arms: true,  size: 1.0 },
-  slime:  { id: 3, name: 'Slime',       ic: '🟢', c: 'linear-gradient(180deg,#b6ff8a,#3fd16b)', home: 38,  edge: 110, area: 650, bend: 120, visc: 0.25, damp: 4.5, inertia: 0.9,  pressK: 1300, pokeK: 1.1,  follow: 3.2, grabK: 260, jump: 0.7, dentDecay: 1.2,  dentW: 0.35, friction: 7,   walk: 120, bob: 0,  arms: true,  size: 1.05 },
+  slime:  { id: 3, name: 'Slime',       ic: '🟢', c: 'linear-gradient(135deg,#ff6b6b,#ffd23f 40%,#4da3ff 75%,#5fd36b)', home: 38,  edge: 110, area: 650, bend: 120, visc: 0.25, damp: 6,   inertia: 0.9,  pressK: 1300, pokeK: 1.1,  follow: 3.2, grabK: 260, jump: 0.7, dentDecay: 0.35, dentW: 0.35, friction: 7,   walk: 120, bob: 0,  arms: true,  size: 1.05 },
   bubble: { id: 4, name: 'Bubble',      ic: '🫧', c: 'linear-gradient(180deg,#d9f4ff,#8fc8ff)', home: 70,  edge: 200, area: 600, bend: 300, visc: 0.1,  damp: 3,  inertia: 0.5,  pressK: 900,  pokeK: 0.8,  follow: 10, grabK: 150, jump: 1.0,  dentDecay: 5,    dentW: 0.3,  friction: 1.0, walk: 200, bob: 0,  arms: false, size: 0.95, hover: true },
   marsh:  { id: 5, name: 'Marshmallow', ic: '☁️', c: 'linear-gradient(180deg,#fff,#ffcfe4)',    home: 70,  edge: 300, area: 400, bend: 400, visc: 0.45, damp: 13, inertia: 0.3,  pressK: 1400, pokeK: 0.6,  follow: 15, grabK: 200, jump: 0.9,  dentDecay: 0.9,  dentW: 0.4,  friction: 8,   walk: 210, bob: 9,  arms: true,  size: 1.0 },
   ice:    { id: 6, name: 'Ice',         ic: '🧊', c: 'linear-gradient(180deg,#e6fbff,#86d6f2)', home: 900, edge: 1200, area: 400, bend: 900, visc: 0.3, damp: 16, inertia: 0.04, pressK: 200,  pokeK: 0.08, follow: 22, grabK: 0,   jump: 0.8,  dentDecay: 20,   dentW: 0.2,  friction: 1.2, walk: 260, bob: 0,  arms: true,  size: 0.9, noDent: true },
@@ -844,7 +852,7 @@ const MSND = {
   mercury: { tap: () => Snd.plink(1),             press: () => {},                       knead: () => {},                       release: () => {},                                                         land: v => Snd.plink(v * 0.8) },
 };
 const JELLY_COLS = [[0.95, 0.2, 0.35], [0.45, 0.85, 0.25], [0.2, 0.55, 1.0], [1.0, 0.55, 0.1], [0.62, 0.3, 0.95], [1.0, 0.8, 0.15], [1.0, 0.4, 0.65]];
-const SLIME_COLS = [[0.45, 0.95, 0.3], [0.75, 0.35, 1.0], [1.0, 0.35, 0.7], [0.25, 0.8, 1.0], [1.0, 0.85, 0.2]];
+const SLIME_COLS = [[0.96, 0.26, 0.26], [0.26, 0.52, 1.0], [1.0, 0.82, 0.22], [0.36, 0.84, 0.36], [0.66, 0.42, 0.96], [1.0, 0.56, 0.16], [1.0, 0.46, 0.72], [0.2, 0.8, 0.86]];
 const MARSH_COLS = [[1, 0.97, 0.97], [1, 0.82, 0.9], [0.85, 0.97, 0.9], [0.92, 0.88, 1], [1, 0.93, 0.8]];
 const ICE_COLS = [[0.7, 0.92, 1], [0.8, 0.95, 1], [0.75, 0.85, 1], [0.8, 1, 0.95]];
 function matColor(mat, x, y) {
@@ -1025,7 +1033,6 @@ class Sprite {
     if (this.castle) { this.castle.hits++; Snd.crunch(1); this.impulse(rand(-120, 120), 60);
       for (let k = 0; k < 3; k++) grains(this.x + rand(-1, 1) * this.r, this.y - rand(0.6, 1.6) * this.r, 8, pick(this.cols), 0.6);
       if (this.castle.hits >= 5) this.splitCastle(); else { this.mood = 'surprised'; this.moodT = 0.4; } return; }
-    if (this.mat === 'butter') { this.tapMelt = Math.min(1, this.tapMelt + 0.16); this.meltIdle = 0; Snd.sizzle(0.5 + this.tapMelt * 0.6); if (this.melt > 0.35) drops(wx, wy, 3, this.col); }
     if (this.mat === 'ice') { this.crack++; this.crackT = 0; Snd.crack(0.5 + this.crack * 0.12); this.impulse(rand(-90, 90), 0);
       sparks(wx, wy, 3, 10, '#e8fbff'); if (this.crack >= 5) { this.shatter(); return; } }
     if (this.z <= 0 && this.state === 'idle' && !M.hover) this.vz = rand(200, 280) * M.jump;
@@ -1042,7 +1049,7 @@ class Sprite {
       case 'sand': grains(wx, wy, (12 * k) | 0, c, 0.7); break;
       case 'jelly': drops(wx, wy, (3 * k) | 0, c); sparks(wx, wy, (2 * k) | 0, 10); break;
       case 'butter': sparks(wx, wy, (2 * k) | 0, 10, '#fff6c8'); break;
-      case 'slime': drops(wx, wy, (4 * k) | 0, c); break;
+      case 'slime': grains(wx, wy, (3 * k) | 0, c, 0.35); break;
       case 'bubble': bubblesP(wx, wy, (3 * k) | 0); break;
       case 'marsh': fluff(wx, wy, (7 * k) | 0, 'rgba(255,255,255,0.9)'); break;
       case 'ice': sparks(wx, wy, (5 * k) | 0, 14, '#e8fbff'); break;
@@ -1202,7 +1209,7 @@ class Sprite {
       stamp(g[0], g[1], 0, 0, this.r / cellPx() * 0.7, Math.min(0.1, imp / 9000), 0, null, 0); grains(this.x, this.y, Math.min(20, (imp / 60) | 0), sandColorAt(this.x, this.y));
       if (this.mat === 'sand' && imp > 650 && !this.pile) this.collapse(0.8);
       if (this.mat === 'mercury' && imp > 750 && this.mergeCD <= 0) this.split();
-      if (this.mat === 'jelly' || this.mat === 'slime') drops(this.x, this.y - this.r * 0.3, 4, this.col); }
+      if (this.mat === 'jelly') drops(this.x, this.y - this.r * 0.3, 4, this.col); }
     else if (imp > 150) { if (thr('pat', 60)) Snd.pat(0.6); stamp(g[0], g[1], 0, 0, this.r / cellPx() * 0.5, 0.02, 0, null, 0); }
   }
   hopTo(tx, ty, vz) { if (this.M.hover) { this.vx = (tx - this.x) * 1.2; this.vy = (ty - this.y) * 1.2; return; } const Tt = 2 * vz / GRAV; this.vz = vz; this.vx = (tx - this.x) / Tt; this.vy = (ty - this.y) / Tt; }
@@ -1934,27 +1941,6 @@ function drawTrails(c, dt) {
       c.globalAlpha = 0.6 * tw * tr.fade; c.fillStyle = k % 4 ? '#fff3b0' : '#ffd1f0'; c.beginPath(); c.arc(p.x, p.y, 2.8, 0, TAU); c.fill(); } }
   c.restore();
 }
-// slime: touching slimes stick together and stretch a gooey strand until it snaps
-const links = [];
-function linkSlime(a, b) { if (links.some(l => (l.a === a && l.b === b) || (l.a === b && l.b === a))) return; links.push({ a, b, t: 0 }); if (thr('slk', 300)) Snd.blorp(0.5); }
-function updateLinks(dt) {
-  for (let i = links.length - 1; i >= 0; i--) { const l = links[i], a = l.a, b = l.b; l.t += dt;
-    if (a.dead || b.dead || !a.visible() || !b.visible()) { links.splice(i, 1); continue; }
-    const dx = b.x - a.x, dy = b.y - a.y, d = hyp(dx, dy) || 1, rr = a.r + b.r;
-    if (d > rr * 2.4 || l.t > 9) { Snd.thwip(); drops((a.x + b.x) / 2, (a.y + b.y) / 2 - rr * 0.25, 6, a.col); a.impulse(dx / d * 150, 0); b.impulse(-dx / d * 150, 0); links.splice(i, 1); continue; }
-    if (d > rr * 0.9) { const f = (d - rr * 0.9) * 3 * dt, nx = dx / d, ny = dy / d;
-      if (a.state !== 'held' && a.state !== 'walk') { a.vx += nx * f * 2.5; a.vy += ny * f * 2.5; if (a.state === 'idle' && a.z <= 0) a.state = 'fly'; }
-      if (b.state !== 'held' && b.state !== 'walk') { b.vx -= nx * f * 2.5; b.vy -= ny * f * 2.5; if (b.state === 'idle' && b.z <= 0) b.state = 'fly'; } } }
-}
-function drawLinks(c) {
-  for (const l of links) { const a = l.a, b = l.b, rr = a.r + b.r;
-    let ax = a.x, ay = a.y - a.z - a.r * 0.32, bx = b.x, by = b.y - b.z - b.r * 0.32; const d = hyp(bx - ax, by - ay); if (d < rr * 1.05) continue;
-    const ux = (bx - ax) / d, uy = (by - ay) / d; ax += ux * a.r * 0.8; ay += uy * a.r * 0.5; bx -= ux * b.r * 0.8; by -= uy * b.r * 0.5;
-    const gap = hyp(bx - ax, by - ay), th = Math.max(2, Math.min(a.r, b.r) * 0.45 * clamp(1 - (d - rr * 1.05) / (rr * 1.35), 0.06, 1)), mx = (ax + bx) / 2, my = (ay + by) / 2 + gap * 0.18;
-    const g = c.createLinearGradient(ax, ay, bx, by); g.addColorStop(0, css(a.col, 0.92)); g.addColorStop(1, css(b.col, 0.92));
-    c.lineCap = 'round'; c.strokeStyle = g; c.lineWidth = th; c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo(mx, my, bx, by); c.stroke();
-    c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = th * 0.25; c.beginPath(); c.moveTo(ax, ay - th * 0.2); c.quadraticCurveTo(mx, my - th * 0.25, bx, by - th * 0.2); c.stroke(); }
-}
 const colorClose = (c, d) => Math.abs(c[0] - d[0]) + Math.abs(c[1] - d[1]) + Math.abs(c[2] - d[2]) < 0.15;
 function mergeMerc(a, b, keepA = false) {
   const big = keepA ? a : (a.r >= b.r ? a : b), small = big === a ? b : a, A = a.r * a.r, B = b.r * b.r;
@@ -1962,7 +1948,7 @@ function mergeMerc(a, b, keepA = false) {
   big.setRadius(Math.min(Math.sqrt(A + B), baseR * 2.2)); big.walls(true); big.resetInertia(); big.impulse(0, 220); big.mergeCD = 0.4;
   big.mood = 'giggle'; big.moodT = 1; big.giggle(0.6, 0, 0.15); small.dead = true; small.e = 0; small.ptr = null; Snd.blop(); sparks(big.x, big.cy, 8, big.r * 0.8);
 }
-// jelly / marshmallow: two different colours make one multi-coloured sprite
+// jelly / marshmallow / slime: two make one bigger sprite; new colours are added (layers, swirl, marbled clay)
 function mergeColors(keep, gone) {
   const cols = keep.cols.slice(); let fresh = false; for (const c of gone.cols) if (!cols.some(d => colorClose(c, d))) { cols.push(c); fresh = true; }
   keep.cols = cols.slice(-4); keep.col = keep.cols.reduce((a, c) => [a[0] + c[0] / keep.cols.length, a[1] + c[1] / keep.cols.length, a[2] + c[2] / keep.cols.length], [0, 0, 0]);
@@ -1974,13 +1960,27 @@ function mergeColors(keep, gone) {
 function tryMerge(h, o) {
   if (h.isLetter || o.isLetter) return false;
   if (o.dead || o.state === 'peek' || o.state === 'emerge' || o.state === 'dive' || o.popped) return false;
-  if (o.state === 'held' && h.mat !== 'jelly' && h.mat !== 'marsh' && h.mat !== 'mercury') return false;
+  if (o.state === 'held' && h.mat !== 'jelly' && h.mat !== 'marsh' && h.mat !== 'slime' && h.mat !== 'mercury') return false;
   switch (h.mat) {
     case 'mercury': mergeMerc(h, o, true); return true;
-    case 'jelly': case 'marsh': mergeColors(h, o); return true;
+    case 'jelly': case 'marsh': case 'slime': mergeColors(h, o); return true;
     case 'sand': if (!h.castle && !o.castle && !o.pile && !h.pile && slotFree.length >= 0) { o.makeCastle(h); return true; } return false;
   }
   return false;
+}
+function butterSand(a, b) {
+  const bu = a.mat === 'butter' ? a : b, sa = bu === a ? b : a, busy = s => s.dead || s.popped || s.isLetter || s.castle || s.state === 'peek' || s.state === 'emerge' || s.state === 'dive' || s.state === 'sink';
+  if (busy(bu) || busy(sa)) return false;
+  const A = bu.r * bu.r, B = sa.r * sa.r, x = (bu.x * A + sa.x * B) / (A + B), y = (bu.y * A + sa.y * B) / (A + B);
+  // the sand's colour, made bright like modelling clay, marbled with the butter's yellow
+  const hs = rgb2hsl(sa.col[0], sa.col[1], sa.col[2]), sc = hsl2rgb(hs[0], Math.max(0.75, hs[1]), clamp(hs[2], 0.5, 0.6));
+  for (const s of [bu, sa]) { freeSlot(s.slot); s.slot = -1; s.dead = true; s.ptr = null; s.e = 0; }
+  const n = new Sprite(x, y, { mat: 'slime', state: 'idle', e: 1 }); sprites.push(n);
+  n.cols = [[1, 0.84, 0.3], sc]; n.col = mix(n.cols[0], sc, 0.5); n.setRadius(Math.min(Math.sqrt(A + B) * 0.8, baseR * 1.5)); n.walls(true);
+  n.vz = 360; n.spinV = 10; n.arms(2); n.mood = 'giggle'; n.moodT = 1.6; n.giggle(1, 5, 0.2);
+  MSND.slime.press(); Snd.chimes([784, 988, 1175, 1568], 0.07, 0.08);
+  grains(x, y, 18, sa.col, 1.0); grains(x, y, 10, bu.col, 0.8); sparks(x, y - n.r, 16, n.r * 1.1); hearts(x, y - n.r, 3); ringP(x, y, n.r * 1.8);
+  return true;
 }
 function sandTap(x, y) {
   const g = toGrid(x, y); stamp(g[0], g[1], 0, 0, brushR() * 0.7, 0.06, 0, paintColor(), 0.7); grains(x, y, 10, sandColorAt(x, y), 0.8); ringP(x, y, 26); Snd.pff();
@@ -2098,7 +2098,6 @@ function drawFx() {
   drawTrails(c, lastDt);
   drawTrace(c);
   for (const s of sprites) s.drawLip(c);
-  drawLinks(c);
   for (const s of sprites) if (s.castle && s.e > 0.9) { let k = 0; for (let i = 1; i < NB; i++) if (s.py[i] < s.py[k]) k = i;
     const x = s.ax + s.px[k], y = s.ay + s.py[k], h = s.r * 0.5, wv = Math.sin(T * 6) * s.r * 0.06;
     c.strokeStyle = '#6b4a2e'; c.lineWidth = 2.5; c.lineCap = 'round'; c.beginPath(); c.moveTo(x, y + 2); c.lineTo(x, y - h); c.stroke();
@@ -2113,7 +2112,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const rawMs = now - last; let dt = rawMs / 1000; last = now; perfTick(rawMs); if (dt > 0.05) dt = 0.05; if (dt <= 0) return; T += dt;
   const pf = PROF.on; let q0 = pf ? performance.now() : 0; const mark = pf ? k => { const q = performance.now(); PROF.acc[k] = (PROF.acc[k] || 0) + q - q0; PROF.mx[k] = Math.max(PROF.mx[k] || 0, q - q0); q0 = q; } : null;
-  updatePointers(dt); updateWhirls(dt); updateWave(dt); updateLinks(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
+  updatePointers(dt); updateWhirls(dt); updateWave(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
   if (pf) mark('misc');
   for (const s of sprites) s.update(dt);
   if (pf) mark('sprites');
@@ -2121,14 +2120,15 @@ function loop(now) {
     const a = sprites[i], b = sprites[j]; if (a.dead || b.dead || !a.visible() || !b.visible() || a.z > (a.M.hover ? 45 : 20) || b.z > (b.M.hover ? 45 : 20)) continue;
     const dx = b.x - a.x, dy = (b.y - a.y) * 1.4, d = hyp(dx, dy) || 1, md = (a.r + b.r) * 0.85;
     // same material + one of them held (or both, with two fingers): merge on a firm push, or after touching for a moment
-    if (a.mat === b.mat && (a.state === 'held' || b.state === 'held') && d < md * 1.04) {
+    // butter + sand kneaded together make a slime
+    const bs = (a.mat === 'butter' && b.mat === 'sand') || (a.mat === 'sand' && b.mat === 'butter');
+    if ((a.mat === b.mat || bs) && (a.state === 'held' || b.state === 'held') && d < md * 1.04) {
       const h = a.state === 'held' && b.state === 'held' ? (b.r > a.r ? b : a) : (a.state === 'held' ? a : b), o = h === a ? b : a;
       if (o.touchBy !== h || T - o.touchSeen > 0.1) { o.touchBy = h; o.touchT = 0; } o.touchSeen = T; o.touchT += lastDt;
-      if ((d < md * 0.97 || o.touchT > 0.12) && tryMerge(h, o)) continue; }
+      if ((d < md * 0.97 || o.touchT > 0.12) && (bs ? butterSand(h, o) : tryMerge(h, o))) continue; }
     if (a.mat === 'mercury' && b.mat === 'mercury' && !a.isLetter && a.mergeCD <= 0 && b.mergeCD <= 0 && !a.ptr && !b.ptr && a.state !== 'walk' && b.state !== 'walk') {
       if (d < md * 0.95) { mergeMerc(a, b); continue; }
       if (d < md * 2) { const nx = dx / d, ny = dy / d * 0.7; a.vx += nx * 170 * lastDt; a.vy += ny * 170 * lastDt; b.vx -= nx * 170 * lastDt; b.vy -= ny * 170 * lastDt; } }
-    if (d < md && a.mat === 'slime' && b.mat === 'slime' && !a.isLetter && !b.isLetter) linkSlime(a, b);
     if (d < md) { const push = (md - d) / 2, nx = dx / d, ny = dy / d;
       const af = a.state === 'held' || a.castle ? 0 : 1, bf = b.state === 'held' || b.castle ? 0 : 1, tot = af + bf || 1;
       a.x -= nx * push * 2 * af / tot; a.y -= ny * push * 2 * af / tot / 1.4; b.x += nx * push * 2 * bf / tot; b.y += ny * push * 2 * bf / tot / 1.4;
