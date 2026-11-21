@@ -11,13 +11,14 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 - **Find the peekers:** eyes sometimes peek out of the sand. Tap them!
 - **Tap** a sprite to make it bounce, **press and hold** to squish it, **drag** to stretch it, **fling** it to bounce off the walls.
 - **Colours on the left** paint the sand (rainbow changes as you draw, ✋ just mixes).
-- **🌙 Night** makes things glow, **🌊 Smooth** washes in fresh sand, **👾 Summon** lets you pick a material.
+- **🌙 Night** makes things glow, **🌊 Smooth** washes in fresh sand, **🌀 Swirl** pulls every sprite except the letter friends down into the sand, **👾 Summon** lets you pick a material.
 
 ## Learning: write numbers and letters
 - Tap **✏️ Write**, tap a **magic star** that sometimes falls into the sand, or pick a tile in the **📖 book**.
 - The numbers 1–9 and the letters A–Z are traced one stroke at a time, in the order taught at school: a green star marks where to start, arrows show the direction, and a sprite walks each stroke first, then follows her finger.
 - Finishing a stroke plays a chime and the helper sprite cheers. Finishing the whole character darkens the sky for fireworks, reads it aloud in English ("Bee! Bee is for Bear!" with 🐻, or counts "One, two, three!" for numbers), praises her, and adds confetti, a parade or a party.
-- The finished character turns into a **gummy letter friend** that says its name when tapped. Friends are saved on the device and come back next time (up to 14 on screen); the book shows every character collected, with stars.
+- The finished character turns into a **gummy letter friend** that says its name when tapped. Friends wait on the sand (saved on the device, up to 14).
+- In the **📖 book**, **✨ Collect** sends every letter friend on the sand flying into the book; each one earns its star there, then the book opens to show the new stars.
 
 ## Materials
 | | Shape | Feel |

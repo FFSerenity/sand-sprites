@@ -57,6 +57,12 @@ body{position:fixed;inset:0}
 #book .tile.got{color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.4),rgba(255,255,255,0) 50%),var(--tc);box-shadow:0 4px 0 rgba(0,0,0,.15),inset 0 -4px 0 rgba(0,0,0,.12);text-shadow:0 2px 0 rgba(0,0,0,.2)}
 #book .tile.press{transform:scale(.92)}
 #book .tile .stars{position:absolute;bottom:3px;left:0;right:0;font-size:clamp(8px,1.4vmin,12px);letter-spacing:-1px;text-shadow:none}
+#book .collect{display:flex;align-items:center;gap:8px;margin:-4px auto 16px;border:none;border-radius:999px;padding:10px 22px;font-family:inherit;font-weight:900;font-size:clamp(17px,2.8vmin,26px);color:#fff;background:linear-gradient(180deg,#ffd36b,#ff9f1c);box-shadow:0 5px 0 #d9771a,0 10px 18px rgba(0,0,0,.18);cursor:pointer;touch-action:manipulation}
+#book .collect .chip{display:inline-flex;align-items:center;justify-content:center;min-width:1.5em;height:1.5em;padding:0 .2em;border-radius:.5em;background:var(--tc);font-size:.8em;box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
+#book .collect:disabled{background:#efe3d2;box-shadow:none;color:#b9a892;cursor:default}
+#book .collect.press{transform:translateY(4px);box-shadow:0 1px 0 #d9771a}
+#book .tile.new{animation:tilePop .8s ease-out}
+@keyframes tilePop{0%{transform:scale(1)}35%{transform:scale(1.28) rotate(-6deg)}70%{transform:scale(.95)}100%{transform:scale(1)}}
 #book .close{position:absolute;right:14px;top:14px;--b:44px;font-size:20px;--c:linear-gradient(180deg,#ffa3b1,#ff5d73)}
 @keyframes bump{40%{transform:scale(1.18)}}
 #picker{position:fixed;display:grid;grid-template-columns:repeat(3,var(--m));gap:30px 14px;padding:14px 16px 32px;border-radius:30px;background:rgba(60,30,85,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.35);--m:clamp(56px,9vmin,82px);
@@ -94,10 +100,11 @@ body{position:fixed;inset:0}
     <button class="btn" id="bWrite" style="--c:linear-gradient(180deg,#ffd9a8,#ff9f43)">✏️<span class="lbl">Write</span></button>
     <button class="btn" id="bSun" style="--c:linear-gradient(180deg,#8f86e8,#4b3fa8)"><span id="sunIc">🌙</span><span class="lbl" id="sunLbl">Night</span></button>
     <button class="btn" id="bWave" style="--c:linear-gradient(180deg,#9fe0ff,#4fa8f0)">🌊<span class="lbl">Smooth</span></button>
+    <button class="btn" id="bSwirl" style="--c:linear-gradient(180deg,#dcb8ff,#8a4fd8)">🌀<span class="lbl">Swirl</span></button>
     <button class="btn" id="bSummon" style="--c:linear-gradient(180deg,#8ff0d8,#2fbf9f)">👾<span class="lbl">Summon</span></button>
   </div>
 </div>
-<div id="book"><div class="panel"><button class="btn close" id="bBookX" aria-label="Close">✖</button><h2 id="bookTitle">My ABC &amp; 123</h2><div class="grid" id="bookGrid"></div></div></div>
+<div id="book"><div class="panel"><button class="btn close" id="bBookX" aria-label="Close">✖</button><h2 id="bookTitle">My ABC &amp; 123</h2><button class="collect" id="bCollect"></button><div class="grid" id="bookGrid"></div></div></div>
 <div id="start">
   <div class="title">Sand Sprites</div>
   <div class="sub">Swirl · Squish · Toss · Draw a path</div>
@@ -743,7 +750,8 @@ const Snd = (() => {
   function duck(on) { if (!mus || ducked === on) return; ducked = on; mus.gain.setTargetAtTime(musOn ? (on ? 0.15 : 0.6) : 0, ac.currentTime, 0.1); }
   function setMusic(on) { musOn = on; save(); if (mus) mus.gain.setTargetAtTime(on ? 0.6 : 0, ac.currentTime, 0.1); }
   function suspend() { if (ac) ac.suspend().catch(() => {}); }
-  return Object.assign(S, { unlock, setSwish, setWhirl, setSfx, setMusic, suspend, duck, get sfxOn() { return sfxOn; }, get musOn() { return musOn; } });
+  Object.assign(S, { unlock, setSwish, setWhirl, setSfx, setMusic, suspend, duck });
+  return Object.defineProperties(S, { sfxOn: { get: () => sfxOn }, musOn: { get: () => musOn } });
 })();
 const thrT = {};
 function thr(key, gap) { const t = performance.now(); if (t - (thrT[key] || 0) < gap) return false; thrT[key] = t; return true; }
@@ -1441,6 +1449,7 @@ function spawnPeek() { if (!slotFree.length) return; const pos = randSpot(); con
 function hitSprite(x, y) {
   let best = null, bd = 1e9;
   for (const s of sprites) { if (s.dead || s.popped || s.state === 'sink' || s.state === 'dive' || s.state === 'caught') continue;
+    if (s.state === 'collect') continue;
     if (s.isLetter) { const d = s.hit(x, y); if (d >= 0 && d * s.gh < bd) { bd = d * s.gh; best = s; } continue; }
     let cy = s.cy, rr = s.r * 1.25; if (s.state === 'peek') { cy = s.y - s.r * 0.55; rr = s.r * 1.35; } if (s.pile) { cy = s.y - s.r * 0.3; rr = s.r * 1.4; }
     const d = hyp(x - s.x, (y - cy) * 0.95); if (d < rr && d < bd) { bd = d; best = s; } }
@@ -1550,16 +1559,23 @@ const Voice = (() => {
 })();
 
 // ---------- collection book (saved on this device) ----------
+// c: points per letter (counted when a letter friend is collected into the book)
+// f: letter friends waiting on the sand · pre: ones on the sand that were already counted under the old rule
 const Book = {
-  data: { c: {}, f: [] },
-  load() { try { const d = JSON.parse(localStorage.getItem('sandSpritesBook') || 'null'); if (d && d.c) this.data = { c: d.c, f: d.f || [] }; } catch (e) {} },
+  data: { v: 2, c: {}, f: [], pre: {} },
+  load() { try { const d = JSON.parse(localStorage.getItem('sandSpritesBook') || 'null'); if (!d || !d.c) return;
+    this.data = { v: 2, c: d.c, f: d.f || [], pre: d.pre || {} };
+    if (!d.v) { this.data.f = this.data.f.slice(-12); for (const id of this.data.f) this.data.pre[id] = (this.data.pre[id] || 0) + 1; this.save(); } } catch (e) {} },
   save() { try { localStorage.setItem('sandSpritesBook', JSON.stringify(this.data)); } catch (e) {} },
-  add(id) { this.data.c[id] = (this.data.c[id] || 0) + 1; this.data.f.push(id); if (this.data.f.length > 40) this.data.f.shift(); this.save(); bookBadge(); },
+  addFriend(id) { this.data.f.push(id); this.save(); },
+  collect(id) { const f = this.data.f, i = f.indexOf(id); if (i >= 0) f.splice(i, 1);
+    if ((this.data.pre[id] || 0) > 0) this.data.pre[id]--; else this.data.c[id] = (this.data.c[id] || 0) + 1; this.save(); bookBadge(); },
   count(id) { return this.data.c[id] || 0; },
+  seen(id) { let n = this.count(id) - (this.data.pre[id] || 0); for (const x of this.data.f) if (x === id) n++; return n; },
   total() { return Object.values(this.data.c).reduce((a, b) => a + b, 0); },
 };
 Book.load();
-function nextGlyph(not) { let min = 1e9; for (const id of GLYPH_IDS) min = Math.min(min, Book.count(id)); const c = GLYPH_IDS.filter(id => Book.count(id) === min && id !== not); return pick(c.length ? c : GLYPH_IDS); }
+function nextGlyph(not) { let min = 1e9; for (const id of GLYPH_IDS) min = Math.min(min, Book.seen(id)); const c = GLYPH_IDS.filter(id => Book.seen(id) === min && id !== not); return pick(c.length ? c : GLYPH_IDS); }
 
 // ---------- gummy letter mesh (a tube along each stroke) ----------
 const MESH_CACHE = {};
@@ -1645,9 +1661,18 @@ class LetterFriend extends Sprite {
         if (sp > 20) { const a2 = toGrid(ox, oy), b2 = toGrid(this.x, this.y); plow(a2[0], a2[1], b2[0], b2[1], this.gh * 0.12 / cellPx(), 0.008, 0.4, this.col, 0.2); } break; }
       case 'idle': case 'fly': if (this.age > this.life) this.age = 0; this.physics(dt); break;
       case 'caught': followCage(this, dt); break;
+      case 'collect': this.updateCollect(dt); break;
     }
     const svy = ((this.y - this.z) - this.lastY) / dt, dvy = svy - this.lastVy; if (Math.abs(dvy) > 150) this.sqv -= clamp(dvy * 0.004, -5, 5);
     this.lastVx = (this.x - this.lastX) / dt; this.lastVy = svy; this.lastX = this.x; this.lastY = this.y - this.z;
+  }
+  updateCollect(dt) {
+    const k = Math.min(1, this.st / 0.8), e = k * k * (3 - 2 * k), bb = $('#bBook').getBoundingClientRect(), tx = bb.left + bb.width / 2, ty = bb.top + bb.height / 2;
+    this.grow = Math.max(0.12, 1 - 0.88 * e); this.z = 0; this.spin += dt * 9 * k;
+    this.x = this.cx0 + (tx - this.cx0) * e; this.y = this.cy0 + (ty - this.cy0) * e - Math.sin(k * Math.PI) * 90 + this.gh * 0.5 * this.grow;
+    if (Math.random() < 0.6) sparks(this.x, this.y - this.gh * 0.5 * this.grow, 1, 10, '#ffe58a');
+    if (k >= 1) { this.dead = true; Book.collect(this.id); sparks(tx, ty, 10, 18, '#ffe58a'); Snd.chimes([pick([1568, 1760, 2093, 2349, 2637])], 0, 0.1);
+      const b = $('#bBook'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); if (this.group) landed(this.group); }
   }
   setUniforms() {
     gl.uniform3f(USP.uCol, this.col[0], this.col[1], this.col[2]); gl.uniform1f(USP.uMat, 1); gl.uniform1f(USP.uR, this.gh * 0.3); gl.uniform1f(USP.uSeed, this.seed);
@@ -1663,20 +1688,21 @@ class LetterFriend extends Sprite {
     return m.n;
   }
   armMesh(b, side) { // little feet
+    if (this.state === 'collect') return false;
     const gh = this.gh * this.grow, ra = this.mesh.hw * gh * 0.75, bob = Math.max(0, Math.sin(T * 9 + side)) * (this.state === 'walk' ? 4 : 0);
     const cx = this.x + side * gh * this.mesh.w * 0.22, cy = this.y - this.z + (1 - this.e) * this.bodyH - ra * 0.35 - bob;
     let o = 0; b[o++] = cx; b[o++] = cy; b[o++] = 0; b[o++] = 0; b[o++] = 9; b[o++] = 9;
     for (let i = 0; i < NB; i++) { const a = i / NB * TAU, ca = Math.cos(a), sa = Math.sin(a); b[o++] = cx + ca * ra * 1.3; b[o++] = cy + sa * ra * 0.75; b[o++] = ca; b[o++] = sa; b[o++] = 9; b[o++] = 9; }
     return true;
   }
-  shadowQuads(q) { const k = 1 / (1 + this.z / 120), w = this.gh * this.mesh.w * 0.55 * k * this.grow; q(this.x + this.z * 0.15 + 4, this.y + this.z * 0.1, w, this.gh * 0.14 * k, mix(this.col, [0.25, 0.1, 0.2], 0.45), 0.4); }
+  shadowQuads(q) { if (this.state === 'collect') return; const k = 1 / (1 + this.z / 120), w = this.gh * this.mesh.w * 0.55 * k * this.grow; q(this.x + this.z * 0.15 + 4, this.y + this.z * 0.1, w, this.gh * 0.14 * k, mix(this.col, [0.25, 0.1, 0.2], 0.45), 0.4); }
   drawLip() {}
 }
-function letterCount() { let n = 0; for (const s of sprites) if (s.isLetter && !s.dead && s.state !== 'dive') n++; return n; }
+function letterCount() { let n = 0; for (const s of sprites) if (s.isLetter && !s.dead && s.state !== 'dive' && s.state !== 'collect') n++; return n; }
 function spawnFriend(id, x, y, grow) {
   if (!slotFree.length) return null;
   const f = new LetterFriend(x, y, id, { grow }); f.walls(true); sprites.push(f);
-  if (letterCount() > 14) { let old = null; for (const s of sprites) if (s.isLetter && s !== f && !s.dead && s.state !== 'dive' && !s.ptr && (!old || s.age > old.age)) old = s; if (old) old.dive(); }
+  if (letterCount() > 14) { let old = null; for (const s of sprites) if (s.isLetter && s !== f && !s.dead && s.state !== 'dive' && s.state !== 'collect' && !s.ptr && (!old || s.age > old.age)) old = s; if (old) flyToBook(old); }
   return f;
 }
 
@@ -1816,8 +1842,8 @@ function complete() {
   const fT = Math.max(3.6, tail + 0.6);
   ev(fT, () => { Trace.morph = 0.01; Snd.bloop(); for (const st of Trace.strokes) for (let i = 0; i < st.pts.length; i += 2) addP({ t: 'm', x: st.pts[i].x, y: st.pts[i].y, sp: { x: cx, y: L.y0 + L.gh + 30, r: 40, get cy() { return this.y; } }, k: rand(3, 5), max: 1.0, s: rand(2, 3.5), col: '#ffe58a' }); });
   ev(fT + 0.55, () => { const f = spawnFriend(id, cx, L.y0 + L.gh + Math.min(40, TY + TH - (L.y0 + L.gh) - 10), true); if (f) { f.vz = 380; f.spinV = 12; f.mood = 'giggle'; f.moodT = 2; sparks(f.x, f.y - f.gh * 0.5, 16, f.gh * 0.5); Snd.giggle(f.voice, 1, 5, 0.1); }
-    Book.add(id); const bb = $('#bBook').getBoundingClientRect(); for (let i = 0; i < 8; i++) addP({ t: 'm', x: cx + rand(-30, 30), y: cy + rand(-30, 30), sp: { x: bb.left + bb.width / 2, y: bb.top + bb.height / 2, r: 1, get cy() { return this.y; } }, k: rand(2, 4), max: 1.4, s: 4, col: '#ffd23f' }); });
-  ev(fT + 1.6, () => { Snd.chimes([1568, 2093], 0.08, 0.08); $('#bBook').classList.add('bump'); setTimeout(() => $('#bBook').classList.remove('bump'), 500); endTrace(true); });
+    Book.addFriend(id); });
+  ev(fT + 1.6, () => { Snd.chimes([1568, 2093], 0.08, 0.08); endTrace(true); });
 }
 function endTrace(done) {
   if (!Trace.active) return;
@@ -1905,17 +1931,54 @@ function hitMagic(x, y) { if (!magic || magic.st !== 'idle') return false; if (h
 let bookOpen = false;
 const bookEl = $('#book');
 function bookBadge() { const n = Book.total(), b = $('#bookBadge'); b.textContent = n; b.style.display = n ? 'flex' : 'none'; }
-function openBook() {
+function openBook(hl = []) {
   closePicker(); if (Trace.active) endTrace(false);
   const grid = $('#bookGrid'); grid.innerHTML = '';
-  for (const id of GLYPH_IDS) { const n = Book.count(id), b = document.createElement('button'); b.className = 'tile' + (n ? ' got' : ''); b.style.setProperty('--tc', css(glyphColor(id)));
+  for (const id of GLYPH_IDS) { const n = Book.count(id), b = document.createElement('button'); b.className = 'tile' + (n ? ' got' : '') + (hl.includes(id) ? ' new' : ''); b.style.setProperty('--tc', css(glyphColor(id)));
     b.innerHTML = `${id}${n ? `<span class="stars">${'⭐'.repeat(Math.min(3, n))}${n > 3 ? '+' : ''}</span>` : ''}`;
     b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); press(b); Snd.pop(700, 0.12); setTimeout(() => startTrace(id), 120); });
     grid.appendChild(b); }
+  const pend = pendingLetters(), bc = $('#bCollect');
+  bc.disabled = !pend.length;
+  bc.innerHTML = pend.length ? `✨ Collect ${pend.slice(0, 14).map(s => `<span class="chip" style="--tc:${css(s.col)}">${s.id}</span>`).join('')}` : 'Write letters to collect ✨';
   $('#bookTitle').textContent = `My ABC & 123  ⭐ ${Book.total()}`;
   bookEl.classList.add('open'); bookOpen = true; Snd.chimes([784, 1046.5], 0.08, 0.08);
 }
 function closeBook() { bookEl.classList.remove('open'); bookOpen = false; }
+
+function detach(s) { for (const p of ptrs.values()) if (p.s === s) { p.mode = 'none'; p.s = null; } if (s.state === 'walk') s.endWalk(false); s.ptr = null; s.pressing = false; }
+function flyToBook(s, group = null) {
+  if (s.dead || s.state === 'collect') { if (group) landed(group); return; }
+  s.group = group;
+  if (s.state === 'caught') releaseCaptive(s, s.cage);
+  detach(s); s.cx0 = s.x; s.cy0 = visCY(s); s.state = 'collect'; s.st = 0; s.vx = s.vy = s.vz = 0; s.mood = 'giggle'; s.moodT = 2;
+  Snd.whoop(s.voice); sparks(s.x, s.y - s.gh * 0.5, 6, 20, '#ffe58a');
+}
+const pendingLetters = () => sprites.filter(s => s.isLetter && !s.dead && s.state !== 'dive' && s.state !== 'collect');
+// the book's Collect button: every letter friend on the sand flies into the book and earns its star
+function collectLetters() {
+  const list = pendingLetters(); if (!list.length) return;
+  const bb = $('#bBook').getBoundingClientRect(), bx = bb.left + bb.width / 2, by = bb.top + bb.height / 2;
+  list.sort((a, b) => hyp(a.x - bx, a.y - by) - hyp(b.x - bx, b.y - by));
+  const group = { left: list.length, ids: list.map(s => s.id) }; Snd.magic();
+  list.forEach((s, i) => setTimeout(() => flyToBook(s, group), 300 + i * 200));
+}
+// when the last letter of a Collect has landed, open the book to show the new stars
+function landed(g) { if (--g.left > 0) return; setTimeout(() => { openBook(g.ids); Snd.fanfare2(); setTimeout(() => Voice.say(pick(PRAISE), { pitch: 1.3 }), 500); }, 450); }
+// the Swirl button: every sprite except the letter friends is pulled down into the sand
+function swirlAway() {
+  closePicker(); if (Trace.active) endTrace(false);
+  const cx = TX + TW / 2, cy = TY + TH * 0.55, list = sprites.filter(s => !s.dead && !s.isLetter && s.state !== 'dive' && s.state !== 'sink');
+  addWhirl(cx, cy, Math.min(TW, TH) * 0.3, 0.45, 2.4, 0.003); Snd.chimes([1568, 1318.5, 1046.5, 784], 0.07, 0.07);
+  if (!list.length) return;
+  list.sort((a, b) => hyp(a.x - cx, a.y - cy) - hyp(b.x - cx, b.y - cy));
+  list.forEach((s, i) => setTimeout(() => { if (s.dead || s.state === 'dive' || s.state === 'sink') return;
+    if (s.state === 'caught') releaseCaptive(s, s.cage); detach(s);
+    if (s.popped) { s.dead = true; return; }
+    if (s.state === 'peek' || s.state === 'emerge') { s.state = 'sink'; s.st = 0; return; }
+    s.dive(); addWhirl(s.x, s.y, s.r * 1.4, 0.25, 0.9, 0.004); }, 150 + i * 120));
+  peekTimer = 8 + list.length * 0.12;
+}
 
 // ---------- input ----------
 let started = false, paint = null;
@@ -2026,11 +2089,13 @@ function catchIn(bub, o) {
   sparks(bub.x, bub.cy, 10, bub.r); bubblesP(bub.x, bub.cy, 6);
   return true;
 }
+const restMid = s => { if (s.isLetter) return -s.gh * 0.5 * s.grow; let m = 0; const f = s.mat === 'sand' ? s.form : 0; for (let i = 0; i < NB; i++) m += s.aY[i] * (1 - f) + s.bY[i] * f; return m / NB; };
 function followCage(s, dt) {
   const b = s.cage; if (!b || b.dead || b.popped || b.captive !== s || b.state === 'dive' || b.state === 'sink') { releaseCaptive(s, b); return; }
-  const k = 1 - Math.exp(-dt * 9), ox = s.x, oy = s.y, bob = Math.sin(T * 2.2 + s.phase) * b.r * 0.05;
+  const k = 1 - Math.exp(-dt * 8), ox = s.x, oy = s.y, bob = Math.sin(T * 2.2 + s.phase) * b.r * 0.04;
   s.z += (b.z + 4 - s.z) * Math.min(1, dt * 6); s.vz = 0;
-  s.x += (b.x - s.x) * k; s.y += (b.cy + bob - visCY(s)) * k; s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
+  const mid = b.ay + restMid(b) + bob, ty = mid - restMid(s) + s.z - (s.isLetter ? 0 : (1 - s.e) * s.bodyH);
+  s.x += (b.x - s.x) * k; s.y += (ty - s.y) * k; s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
   if (s.mood === 'happy' && Math.random() < dt * 0.25) { s.mood = 'giggle'; s.moodT = 0.8; }
 }
 function releaseCaptive(c, b) {
@@ -2120,6 +2185,8 @@ onBtn($('#bSun'), () => {
   for (const s of sprites) if (s.visible() && !s.ptr && s.state !== 'walk' && Math.random() < 0.7) { s.arms(0.8); s.mood = nightTarget ? 'surprised' : 'giggle'; s.moodT = 0.8; }
 });
 onBtn($('#bWave'), () => { closePicker(); startWave(); });
+onBtn($('#bSwirl'), () => swirlAway());
+$('#bCollect').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); const b = e.currentTarget; if (b.disabled) return; b.classList.add('press'); setTimeout(() => { b.classList.remove('press'); closeBook(); collectLetters(); }, 140); });
 onBtn($('#bSummon'), () => { picker.classList.toggle('open'); Snd.pop(picker.classList.contains('open') ? 650 : 500, 0.15); });
 const bMusic = $('#bMusic'), bSound = $('#bSound');
 function syncAudioBtns() { bMusic.classList.toggle('off', !Snd.musOn); bSound.classList.toggle('off', !Snd.sfxOn); bSound.textContent = Snd.sfxOn ? '🔊' : '🔇'; }
@@ -2228,7 +2295,8 @@ layout();
 if (initGL()) {
   sprites.push(new Sprite(TX + TW * 0.42, TY + TH * 0.58, { mat: 'jelly', state: 'idle', e: 1 }));
   sprites.push(new Sprite(TX + TW * 0.6, TY + TH * 0.5, { mat: 'sand', state: 'idle', e: 1 }));
-  for (const id of Book.data.f.slice(-12)) if (GLYPHS[id]) { const p = randSpot(); spawnFriend(id, p.x, p.y, false); }
+  while (Book.data.f.length > 14) Book.collect(Book.data.f[0]);
+  for (const id of Book.data.f.slice()) if (GLYPHS[id]) { const p = randSpot(); spawnFriend(id, p.x, p.y, false); }
   requestAnimationFrame(t => { last = t; requestAnimationFrame(loop); });
 }
 window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; } };
