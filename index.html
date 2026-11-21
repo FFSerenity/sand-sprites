@@ -136,7 +136,7 @@ function layout() {
   TX = Math.max(F, si.l); TY = Math.max(F, si.t); TW = W - TX - Math.max(F, si.r); TH = H - TY - Math.max(F, si.b);
   Object.assign(trayEl.style, { left: TX + 'px', top: TY + 'px', width: TW + 'px', height: TH + 'px' });
   for (const c of [glc, fx]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); c.style.width = W + 'px'; c.style.height = H + 'px'; }
-  baseR = clamp(Math.min(TW, TH) * 0.07, 34, 68);
+  baseR = clamp(Math.min(TW, TH) * 0.056, 27, 55);
   const pad = 14, R_ = W - TX - TW, B_ = H - TY - TH;
   $('#tools').style.right = (R_ + pad + 4) + 'px'; $('#tools').style.bottom = (B_ + pad + 22) + 'px';
   $('#picker').style.right = (R_ + pad) + 'px'; $('#picker').style.bottom = (B_ + pad + 22 + 110) + 'px';
@@ -304,6 +304,15 @@ const FS_SP = `
 varying vec2 vDisk; varying vec2 vFace; varying vec2 vCss;
 uniform vec3 uCol; uniform float uMat; uniform vec4 uDents[6]; uniform vec4 uSlot; uniform sampler2D uFace;
 uniform float uR; uniform vec4 uClip; uniform float uFaceOn; uniform vec4 uP; uniform float uSeed;
+uniform vec3 uCols[4]; uniform float uNCol;
+// several colours in bands (layered jelly, striped sand castle) or a swirl (cyc = 1, marshmallow)
+vec3 multiCol(float t, float cyc){
+  if (uNCol < 1.5) return uCol;
+  vec3 c = vec3(0.0); float ws = 0.0, hw = 0.5/uNCol;
+  for (int k=0;k<4;k++){ float fk=float(k); if (fk < uNCol) { float d = abs(t - (fk+0.5)/uNCol); if (cyc > 0.5) d = min(d, 1.0 - d);
+    float w = 1.0 - smoothstep(hw - 0.035, hw + 0.035, d); c += w*uCols[k]; ws += w; } }
+  return c / max(ws, 1e-3);
+}
 void main(){
   float rho = length(vDisk);
 #ifdef NO_DERIV
@@ -329,17 +338,18 @@ void main(){
     float n1 = hash(gp), n2 = hash(gp + 11.3), n3 = hash(gp + 37.1);
     vec3 Ng = normalize(N + vec3((n1-0.5)*0.55, (n2-0.5)*0.55, 0.0));
     float dg = max(dot(Ng, LIGHT), 0.0);
-    col = uCol * (0.46 + 0.74*dg) * (0.92 + 0.16*n1);
+    vec3 bc = multiCol(clamp((vFace.y + 1.0)/1.8 + 0.05*sin(vFace.x*5.0 + uSeed), 0.0, 1.0), 0.0);
+    col = bc * (0.46 + 0.74*dg) * (0.92 + 0.16*n1);
     col *= (0.90 + 0.10*hz) * (1.0 - 0.25*clamp(dentSum,0.0,1.0));
     spec = vec3(step(0.972, n3) * pow(max(0.0, sin(uTime*(1.5+n1*2.0)+n2*60.0)), 10.0) * 0.9);
     if (n2 < smoothstep(0.78, 1.0, rho)*0.9) mask = 0.0;
-    col = mix(col, col*vec3(.36,.38,.62)+uCol*0.10, uNight*0.85);
+    col = mix(col, col*vec3(.36,.38,.62)+bc*0.10, uNight*0.85);
     faceK = 0.92;
   } else if (m < 1.5) {
     // JELLY: see-through, refracts the sand, glossy, fruit + bubbles inside
     float th = hz * (1.0 - 0.5*clamp(dentSum,0.0,1.0));
     vec3 bg = sandAt(vCss + N.xy * uR * (0.30 + 0.28*th));
-    vec3 tint = uCol;
+    vec3 tint = multiCol(clamp((vFace.y + 0.8)/1.6 + 0.06*sin(vFace.x*4.0 + uSeed + uTime*0.3), 0.0, 1.0), 0.0);
     col = bg * mix(vec3(1.0), tint*1.25, 0.72) + tint*0.16*hz;
     for (int k=0;k<4;k++){ float fk=float(k);
       vec2 bc = vec2(sin(fk*2.3+uSeed)*0.42, 0.55 - fract(uTime*0.10+fk*0.27+uSeed)*1.45);
@@ -397,13 +407,14 @@ void main(){
   } else if (m < 5.5) {
     // MARSHMALLOW: soft, powdery, matte
     float wrap = max((dot(N, LIGHT) + 0.5)/1.5, 0.0);
-    col = uCol * (0.64 + 0.42*wrap);
+    vec3 mc = multiCol(fract(atan(vFace.y, vFace.x)/6.2831853 + length(vFace)*0.55 + 0.5), 1.0);
+    col = mc * (0.64 + 0.42*wrap);
     col = mix(col, vec3(1.0), step(0.86, hash(floor(vFace*uR/1.2 + uSeed*7.0)))*0.32);
     col *= 0.965 + 0.05*hash(floor(vFace*uR/3.0));
-    col += uCol*0.12*pow(1.0 - hz, 2.0);
+    col += mc*0.12*pow(1.0 - hz, 2.0);
     col *= 1.0 - 0.1*clamp(dentSum,0.0,1.0);
     spec = vec3(pow(nh, 8.0)*0.04);
-    col = mix(col, col*vec3(.4,.42,.6)+uCol*0.08, uNight*0.85);
+    col = mix(col, col*vec3(.4,.42,.6)+mc*0.08, uNight*0.85);
   } else if (m < 6.5) {
     // ICE: clear cube with bevelled facets, frosty edges, glints
     float ang = atan(vDisk.y, vDisk.x), segW = 6.2831853/8.0, sa = floor(ang/segW + 0.5)*segW;
@@ -415,6 +426,11 @@ void main(){
     col = mix(col, vec3(0.93,0.97,1.0), fr*0.5);
     float cr = abs(sin(vFace.x*7.0 + vFace.y*3.0 + uSeed*5.0) + 0.3*sin(vFace.y*11.0 - uSeed));
     col += smoothstep(0.04, 0.0, cr)*0.22*step(rho, 0.85);
+    for (int k=0;k<5;k++){ float fk=float(k); float grow = clamp((uP.y - fk*0.2)*4.0, 0.0, 1.0); if (grow > 0.0) {
+      vec2 pp = vec2(sin(fk*3.7+uSeed)*0.3, cos(fk*2.9+uSeed*1.3)*0.25); float an = fk*1.9 + uSeed; vec2 nn = vec2(cos(an), sin(an));
+      float dd = abs(dot(vFace - pp, nn) + 0.04*sin(dot(vFace - pp, vec2(-nn.y, nn.x))*18.0)), along = abs(dot(vFace - pp, vec2(-nn.y, nn.x)));
+      float ln = smoothstep(0.03, 0.0, dd) * smoothstep(0.25 + 0.55*grow, 0.15 + 0.55*grow, along);
+      col = mix(col, vec3(1.0), ln*0.8); col *= 1.0 - smoothstep(0.06, 0.03, dd)*smoothstep(0.25 + 0.55*grow, 0.15 + 0.55*grow, along)*0.12; } }
     vec2 gq = floor(vFace*uR/2.0);
     spec = vec3(pow(max(dot(Nf, Hh),0.0), 120.0)*1.8 + step(0.975, hash(gq+uSeed))*pow(max(0.0, sin(uTime*3.0 + hash(gq)*40.0)), 12.0)*1.2);
     col = mix(col, col*vec3(.45,.55,.85) + vec3(0.08,0.18,0.32), uNight*0.8);
@@ -450,7 +466,7 @@ function mkProg(vs, fs, U, names) {
   return p;
 }
 const COMMON_U = ['uA', 'uB', 'uTime', 'uNight', 'uPx', 'uAsp', 'uDpr', 'uTray', 'uRes'];
-const NB = 32, RINGS = [0.3, 0.55, 0.75, 0.9, 1.0], NR = RINGS.length, NV = 1 + NB * NR;
+const NB = 48, RINGS = [0.3, 0.55, 0.75, 0.9, 1.0], NR = RINGS.length, NV = 1 + NB * NR;
 const spBuf = new Float32Array(NV * 6);
 let shBuf = new Float32Array(48 * 24);
 function initGL() {
@@ -460,7 +476,7 @@ function initGL() {
   progSand = mkProg(VS_TRI, COMMON + FS_SAND, US, COMMON_U);
   progSh = mkProg(VS_SH, FS_SH, USH, ['uView']);
   progSp = mkProg(VS_SP, (deriv ? '#extension GL_OES_standard_derivatives : enable\n' : '#define NO_DERIV\n') + COMMON + FS_SP, USP,
-    COMMON_U.concat(['uView', 'uCol', 'uMat', 'uDents', 'uSlot', 'uFace', 'uR', 'uClip', 'uFaceOn', 'uP', 'uSeed']));
+    COMMON_U.concat(['uView', 'uCol', 'uMat', 'uDents', 'uSlot', 'uFace', 'uR', 'uClip', 'uFaceOn', 'uP', 'uSeed', 'uCols', 'uNCol']));
   bufTri = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bufTri); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   bufSh = gl.createBuffer(); bufSp = gl.createBuffer();
   const idx = [];
@@ -500,7 +516,7 @@ function renderGL() {
   up(gl.TEXTURE0, glTexA, texA); up(gl.TEXTURE1, glTexB, texB); texW = GW; texH = GH;
   // faces
   fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.clearRect(0, 0, ATLAS, ATLAS);
-  for (const s of sprites) if (s.slot >= 0 && s.e > 0.001) {
+  for (const s of sprites) if (s.slot >= 0 && s.e > 0.001 && !s.popped) {
     const sx = (s.slot % SLOTS_X) * SLOT, sy = ((s.slot / SLOTS_X) | 0) * SLOT;
     fctx.setTransform(FACE_SCALE, 0, 0, FACE_SCALE, sx + SLOT / 2, sy + SLOT / 2); s.drawFace(fctx, T);
   }
@@ -511,7 +527,7 @@ function renderGL() {
   gl.useProgram(progSand); setCommon(US);
   gl.bindBuffer(gl.ARRAY_BUFFER, bufTri); attribs(1); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
   // shadows
-  const order = sprites.filter(s => s.e > 0.001).sort((a, b) => a.y - b.y);
+  const order = sprites.filter(s => s.e > 0.001 && !s.popped).sort((a, b) => a.y - b.y);
   let n = 0; const need = order.length * 2 * 48; if (shBuf.length < need) shBuf = new Float32Array(need);
   const quad = (cx, cy, rx, ry, c, a) => { const P = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
     for (const p of P) { shBuf[n++] = cx + p[0] * rx; shBuf[n++] = cy + p[1] * ry; shBuf[n++] = p[0]; shBuf[n++] = p[1]; shBuf[n++] = c[0]; shBuf[n++] = c[1]; shBuf[n++] = c[2]; shBuf[n++] = a; } };
@@ -609,7 +625,16 @@ const Snd = (() => {
       const o = osc('sine', 90, t, 0.5, 0.1 * v, 0.08); o.frequency.exponentialRampToValueAtTime(160, t + 0.5); vib(o, t, 7, 15, 0.5); },
     thwip(v = 1) { if (!ok()) return; const t = now(); const o = osc('sine', 900, t, 0.12, 0.2 * v, 0.003); o.frequency.exponentialRampToValueAtTime(220, t + 0.1); S.bubbles(3, 0.5, false, 0.08); },
     softBoing(v = 1) { if (!ok()) return; const t = now(), f = rand(520, 680); const o = osc('sine', f, t, 0.4, 0.16 * v, 0.01); o.frequency.exponentialRampToValueAtTime(f * 1.25, t + 0.35); vib(o, t, 9, f * 0.06, 0.4); osc('sine', f * 2.5, t, 0.15, 0.03 * v, 0.005); },
-    popB(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.035, 0.5 * v, 'highpass', 1800, 0.7, 0.001); const o = osc('sine', 1300, t, 0.06, 0.2 * v, 0.001); o.frequency.exponentialRampToValueAtTime(420, t + 0.05); S.bubbles(5, 0.5, false, 0.05); },
+    popB(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.025, 0.9 * v, 'highpass', 2200, 0.7, 0.0005);
+      const o = osc('triangle', 1900, t, 0.07, 0.35 * v, 0.001); o.frequency.exponentialRampToValueAtTime(260, t + 0.06);
+      const o2 = osc('sine', 160, t, 0.12, 0.3 * v, 0.002); o2.frequency.exponentialRampToValueAtTime(70, t + 0.1);
+      noise(t + 0.01, 0.18, 0.12 * v, 'bandpass', 5000, 0.8, 0.005); S.bubbles(6, 0.45, false, 0.06); },
+    sizzle(v = 1) { if (!ok()) return; const t = now(); for (let i = 0; i < 14; i++) noise(t + Math.random() * 0.35, 0.01 + Math.random() * 0.02, (0.02 + 0.05 * Math.random()) * v, 'highpass', 4000 + Math.random() * 3000, 0.7, 0.002);
+      noise(t, 0.35, 0.06 * v, 'bandpass', 3000, 1, 0.05); S.smoosh(0.5 * v); },
+    shatter(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.05, 0.7 * v, 'highpass', 2500, 0.7, 0.001);
+      for (let i = 0; i < 14; i++) osc('sine', rand(2000, 6000), t + Math.random() * 0.25, rand(0.15, 0.5), 0.06 * v, 0.001);
+      noise(t, 0.4, 0.12 * v, 'bandpass', 4000, 0.8, 0.01); const o = osc('sine', 180, t, 0.15, 0.2 * v, 0.002); o.frequency.exponentialRampToValueAtTime(70, t + 0.12); },
+    fanfare() { S.chimes([523.25, 659.25, 783.99, 1046.5, 1318.5], 0.11, 0.12); },
     pfff(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.2, 0.3 * v, 'lowpass', 900, 0.7, 0.015); osc('sine', 120, t, 0.18, 0.12 * v, 0.02); const o = osc('sine', 1500, t + 0.05, 0.08, 0.03 * v, 0.01); o.frequency.exponentialRampToValueAtTime(1800, t + 0.12); },
     foam(v = 1) { if (!ok()) return; const t = now(); const f = noise(t, 0.8, 0.18 * v, 'lowpass', 500, 1, 0.25); f.frequency.exponentialRampToValueAtTime(250, t + 0.8); osc('sine', 100, t, 0.7, 0.06 * v, 0.2); },
     fwump(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.3, 0.42 * v, 'lowpass', 800, 0.7, 0.02); const o = osc('sine', 170, t, 0.25, 0.2 * v, 0.02); o.frequency.exponentialRampToValueAtTime(80, t + 0.22); },
@@ -650,11 +675,24 @@ function hearts(x, y, n) { for (let i = 0; i < n; i++) addP({ t: 'h', x: x + ran
 function drops(x, y, n, col) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), s = rand(60, 200); addP({ t: 'd', x, y, z: rand(0, 10), vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.7, vz: rand(150, 380), max: 0.9, s: rand(3, 6), col: css(col, 0.75) }); } }
 function bubblesP(x, y, n) { for (let i = 0; i < n; i++) addP({ t: 'b', x: x + rand(-20, 20), y: y + rand(-20, 10), vx: rand(-30, 30), vy: rand(-90, -40), max: rand(0.8, 1.5), s: rand(4, 11), ph: rand(0, 6) }); }
 function fluff(x, y, n, col) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), s = rand(30, 110); addP({ t: 'f', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, max: rand(0.5, 0.9), s: rand(5, 11), col }); } }
+function shards(x, y, n, col) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(120, 380);
+  addP({ t: 'shard', x, y, z: rand(0, 20), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.7, vz: rand(200, 500), rot: rand(0, 6), rv: rand(-12, 12), s: rand(4, 10), max: rand(0.8, 1.2), col: css(mix(col, [1, 1, 1], 0.45), 0.85) }); } }
+function popFx(x, y, r) {
+  for (let i = 0; i < 14; i++) { const a = i / 14 * TAU + rand(-0.2, 0.2); addP({ t: 'film', x: x + Math.cos(a) * r * 0.5, y: y + Math.sin(a) * r * 0.5, vx: Math.cos(a) * rand(150, 320), vy: Math.sin(a) * rand(120, 260) - 60, a0: a, span: rand(0.5, 0.9), rr: r * rand(0.3, 0.6), rot: rand(-6, 6), max: rand(0.5, 0.8), hue: rand(0, 1) }); }
+  addP({ t: 'flash', x, y, s: r * 1.3, max: 0.28 });
+  for (let i = 0; i < 10; i++) addP({ t: 'line', x, y, a: i / 10 * TAU + 0.15, r0: r * 0.95, max: 0.32 });
+  addP({ t: 'txt', x, y: y - r * 0.9, s: r * 0.6, max: 0.95, text: 'POP!' });
+  drops(x, y, 10, [0.75, 0.88, 1]); bubblesP(x, y, 16); sparks(x, y, 8, r * 0.6);
+}
 function ringP(x, y, R, col = 'rgba(255,255,255,0.8)') { addP({ t: 'r', x, y, s: R, max: 0.55, col }); }
 function magnet(s, n) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), d = rand(1.2, 2.8) * s.r; addP({ t: 'm', x: s.x + Math.cos(a) * d, y: s.y - s.r * 0.8 + Math.sin(a) * d * 0.75, sp: s, k: rand(2.5, 5), max: 1.3, s: rand(1.6, 3.2), col: css(mix(s.col, [1, 1, 1], rand(-0.1, 0.25))) }); } }
 function updateParticles(dt) {
   for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; p.life += dt; if (p.life >= p.max) { P.splice(i, 1); continue; }
-    if (p.t === 'g' || p.t === 'd') { p.vz -= 1100 * dt; p.z += p.vz * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.z < 0) { P.splice(i, 1); continue; } }
+    if (p.t === 'shard') { p.vz -= 1100 * dt; p.z += p.vz * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.rv * dt; if (p.z < 0) { p.z = 0; p.vz *= -0.3; p.vx *= 0.55; p.vy *= 0.55; p.rv *= 0.5; } }
+    else if (p.t === 'film') { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 220 * dt; p.vx *= 0.97; }
+    else if (p.t === 'txt') { p.y -= 35 * dt; }
+    else if (p.t === 'flash' || p.t === 'line') { }
+    else if (p.t === 'g' || p.t === 'd') { p.vz -= 1100 * dt; p.z += p.vz * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.z < 0) { P.splice(i, 1); continue; } }
     else if (p.t === 'o') { p.a += (2.5 + 160 / Math.max(8, p.rad)) * dt; p.rad *= Math.exp(-dt * 1.6); p.x = p.cx + Math.cos(p.a) * p.rad; p.y = p.cy + Math.sin(p.a) * p.rad * 0.75; if (p.rad < 4) { P.splice(i, 1); continue; } }
     else if (p.t === 'b') { p.x += (p.vx + Math.sin(p.life * 8 + p.ph) * 20) * dt; p.y += p.vy * dt; }
     else if (p.t === 'mb') { const tx = p.sp.x, ty = p.sp.cy; p.k += dt * 6; const k = Math.min(1, dt * p.k); p.x += (tx - p.x) * k; p.y += (ty - p.y) * k; if (Math.hypot(tx - p.x, ty - p.y) < 6) { P.splice(i, 1); continue; } }
@@ -672,6 +710,17 @@ function drawParticles(c) {
     else if (p.t === 'b' || p.t === 'mb') { c.globalAlpha = p.t === 'mb' ? 0.85 : a * 0.9; c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 1.5; c.beginPath(); c.arc(p.x, p.y, p.s, 0, TAU); c.stroke();
       c.fillStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.arc(p.x - p.s * 0.35, p.y - p.s * 0.35, p.s * 0.22, 0, TAU); c.fill(); }
     else if (p.t === 'f') { c.globalAlpha = a * 0.85; c.fillStyle = p.col; c.beginPath(); c.arc(p.x, p.y, p.s * (0.6 + k * 0.6), 0, TAU); c.fill(); }
+    else if (p.t === 'shard') { c.globalAlpha = Math.min(1, a * 2); c.save(); c.translate(p.x, p.y - p.z); c.rotate(p.rot); c.fillStyle = p.col; c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(0, -p.s); c.lineTo(p.s * 0.6, p.s * 0.5); c.lineTo(-p.s * 0.5, p.s * 0.3); c.closePath(); c.fill(); c.stroke(); c.restore(); }
+    else if (p.t === 'film') { c.globalAlpha = a; c.strokeStyle = `hsl(${((p.hue * 360 + p.life * 300) % 360) | 0},90%,72%)`; c.lineWidth = 3; c.lineCap = 'round'; c.beginPath();
+      c.arc(p.x, p.y, p.rr, p.a0 + p.rot * p.life - p.span / 2, p.a0 + p.rot * p.life + p.span / 2); c.stroke(); }
+    else if (p.t === 'flash') { const R = p.s * (0.6 + k * 1.2), g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, R); g.addColorStop(0, `rgba(255,255,255,${0.85 * a})`); g.addColorStop(0.6, `rgba(220,240,255,${0.35 * a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.globalAlpha = 1; c.fillStyle = g; c.beginPath(); c.arc(p.x, p.y, R, 0, TAU); c.fill(); }
+    else if (p.t === 'line') { c.globalAlpha = a; c.strokeStyle = '#fff'; c.lineWidth = 3 * a + 1; c.lineCap = 'round'; const r0 = p.r0 * (1 + k * 0.7), r1 = p.r0 * (1.35 + k * 1.1);
+      c.beginPath(); c.moveTo(p.x + Math.cos(p.a) * r0, p.y + Math.sin(p.a) * r0 * 0.85); c.lineTo(p.x + Math.cos(p.a) * r1, p.y + Math.sin(p.a) * r1 * 0.85); c.stroke(); }
+    else if (p.t === 'txt') { const sc = 0.6 + Math.min(1, k * 4) * 0.6, fs = p.s * sc, yy = p.y; c.globalAlpha = Math.min(1, a * 2.2);
+      c.font = `900 ${fs}px ui-rounded,"Arial Rounded MT Bold",system-ui,sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+      c.lineWidth = fs * 0.16; c.strokeStyle = '#7b44b0'; c.strokeText(p.text, p.x, yy); c.fillStyle = '#fff'; c.fillText(p.text, p.x, yy); }
     else if (p.t === 'h') { c.globalAlpha = Math.min(1, a * 1.6); c.fillStyle = p.col; heartPath(c, p.x, p.y, p.s * (0.7 + 0.3 * Math.sin(p.life * 12))); c.fill(); }
     else if (p.t === 'r') { c.globalAlpha = a * 0.8; c.strokeStyle = p.col; c.lineWidth = 3 * a + 1; c.beginPath(); c.ellipse(p.x, p.y, p.s * (0.3 + k * 1.2), p.s * (0.3 + k * 1.2) * 0.55, 0, 0, TAU); c.stroke(); } }
   c.globalCompositeOperation = 'lighter';
@@ -739,6 +788,14 @@ function shapePts(kind, sh, r, tilt, X, Y) {
       case 'marsh': x = se(c, 3.2) * 0.85 * r; y = se(s, 3.2) * 0.98 * r - 0.98 * r; break;
       case 'ice': { const x0 = se(c, 7) * 0.92 * r, y0 = se(s, 7) * 0.88 * r, ct = Math.cos(tilt), st = Math.sin(tilt); x = x0 * ct - y0 * st; y = x0 * st + y0 * ct - 0.88 * r; break; }
       case 'mercury': x = c * 1.15 * r; y = (s < 0 ? s * 0.72 : s * 0.32) * r - 0.32 * r; break;
+      case 'castle': { // three towers with battlements; outline found by marching a ray out from the middle
+        const cy0 = -0.62 * r, inside = (px, py) => { if (py > 0) return false; const ax = Math.abs(px); if (ax > 1.3 * r) return false; let hg;
+          if (ax < 0.36 * r) { hg = 1.85 * r; if (py < -1.68 * r && Math.floor((px + 0.36 * r) / (0.18 * r)) % 2 === 1) return false; }
+          else if (ax > 0.8 * r) { hg = 1.5 * r; if (py < -1.36 * r && Math.floor((ax - 0.8 * r) / (0.166 * r)) % 2 === 1) return false; }
+          else hg = 1.18 * r;
+          return py >= -hg; };
+        let d = 0; while (d < 3 * r && inside(c * d, cy0 + s * d)) d += r * 0.02;
+        x = c * d; y = cy0 + s * d; break; }
     }
     X[i] = x; Y[i] = y;
   }
@@ -774,9 +831,11 @@ class Sprite {
     this.form = 0; this.formT = 0;  // sand: 0 = heap, 1 = ball
     this.pile = false; this.pileT = 0; this.pileHold = 0.9; this.rebuilding = false; this.rbT = 0;
     this.melt = 0; this.popped = false; this.popT = 0; this.mergeCD = 0; this.walkCD = 0;
+    this.cols = [this.col]; this.castle = null; this.sunMelt = 0; this.tapMelt = 0; this.meltIdle = 9; this.puddle = false; this.crack = 0; this.crackT = 0;
     this.dents = []; this.dentU = new Float32Array(24);
     this.fruit = this.mat === 'jelly' ? [rand(0.18, 0.36) * (Math.random() < 0.5 ? -1 : 1), rand(0.46, 0.54), rand(0.19, 0.23), pick([0, 0, 1, 2])] : [0, 0, 0, 0];
     this.slot = slotFree.length ? slotFree.shift() : -1;
+    this.colsU = new Float32Array(12);
     this.px = new Float32Array(NB); this.py = new Float32Array(NB); this.vxs = new Float32Array(NB); this.vys = new Float32Array(NB);
     this.fx_ = new Float32Array(NB); this.fy_ = new Float32Array(NB); this.hx = new Float32Array(NB); this.hy = new Float32Array(NB);
     this.buildRest();
@@ -788,13 +847,15 @@ class Sprite {
     this.aX = new Float32Array(NB); this.aY = new Float32Array(NB); this.bX = new Float32Array(NB); this.bY = new Float32Array(NB);
     this.dirX = new Float32Array(NB); this.dirY = new Float32Array(NB); this.faceX = new Float32Array(NB); this.faceY = new Float32Array(NB);
     for (let i = 0; i < NB; i++) { const a = i / NB * TAU + UP; this.dirX[i] = Math.cos(a); this.dirY[i] = Math.sin(a); }
-    if (m === 'sand') { shapePts('mound', 0, r, 0, this.aX, this.aY); shapePts('ball', 0, r, 0, this.bX, this.bY); }
+    if (this.castle) { shapePts('castle', 0, r, 0, this.aX, this.aY); this.bX.set(this.aX); this.bY.set(this.aY); }
+    else if (m === 'sand') { shapePts('mound', 0, r, 0, this.aX, this.aY); shapePts('ball', 0, r, 0, this.bX, this.bY); }
     else { shapePts(m === 'jelly' ? 'jelly' : m, this.shape, r, this.tilt, this.aX, this.aY); this.bX.set(this.aX); this.bY.set(this.aY); }
     this.bodyH = -Math.min(Math.min(...this.aY), Math.min(...this.bY)) * 1.02;
   }
   setRadius(nr) {
     const k = nr / this.r; this.r = nr; this.buildRest();
     for (let i = 0; i < NB; i++) { this.px[i] *= k; this.py[i] *= k; }
+    if (this.grabLX !== undefined) { this.grabLX *= k; this.grabLY *= k; }
   }
   // blended rest shape -> RX/RY, plus its centre
   rest() {
@@ -871,6 +932,12 @@ class Sprite {
     if (this.state === 'walk') this.endWalk(false);
     this.pokeLocal(lx, ly, 1); this.addDent(lx, ly, this.mat === 'butter' ? 0.7 : this.mat === 'jelly' ? 0.9 : 0.5); this.arms(0.7);
     if (this.pile) { MSND.sand.tap(); grains(wx, wy, 14, this.col, 0.7); return; }
+    if (this.castle) { this.castle.hits++; Snd.crunch(1); this.impulse(rand(-120, 120), 60);
+      for (let k = 0; k < 3; k++) grains(this.x + rand(-1, 1) * this.r, this.y - rand(0.6, 1.6) * this.r, 8, pick(this.cols), 0.6);
+      if (this.castle.hits >= 5) this.splitCastle(); else { this.mood = 'surprised'; this.moodT = 0.4; } return; }
+    if (this.mat === 'butter') { this.tapMelt = Math.min(1, this.tapMelt + 0.16); this.meltIdle = 0; Snd.sizzle(0.5 + this.tapMelt * 0.6); if (this.melt > 0.35) drops(wx, wy, 3, this.col); }
+    if (this.mat === 'ice') { this.crack++; this.crackT = 0; Snd.crack(0.5 + this.crack * 0.12); this.impulse(rand(-90, 90), 0);
+      sparks(wx, wy, 3, 10, '#e8fbff'); if (this.crack >= 5) { this.shatter(); return; } }
     if (this.z <= 0 && this.state === 'idle' && !M.hover) this.vz = rand(200, 280) * M.jump;
     if (M.hover) { this.vx += rand(-60, 60); this.vy += rand(-40, 40); }
     if (T - this.tapT < 1.1) this.taps++; else this.taps = 1; this.tapT = T;
@@ -897,7 +964,7 @@ class Sprite {
     const [lx, ly] = this.local(p.x, p.y); this.pokeLocal(lx, ly, 0.35); if (this.state === 'fly') this.beginDrag(p);
   }
   beginDrag(p) {
-    if (this.pile) return;
+    if (this.pile || this.castle) return;
     if (this.pressing) this.endPress(false);
     this.state = 'held'; this.e = 1; this.ptr = p; this.ox = this.x - p.x; this.oy = this.y - p.y;
     const [lx, ly] = this.local(p.x, p.y); this.grabLX = lx; this.grabLY = ly;
@@ -907,6 +974,7 @@ class Sprite {
   beginPress() {
     this.pressing = true; this.pressT = 0; this.kneadT = 0.55;
     const [lx, ly] = this.local(this.ptr.x, this.ptr.y);
+    if (this.castle) { this.pressing = false; Snd.crunch(0.6); return; }
     if (this.mat === 'bubble') { this.pop(); this.pressing = false; return; }
     if (this.mat === 'mercury') { this.pressing = false; this.split(); return; }
     MSND[this.mat].press(); this.mood = 'squeeze'; this.moodT = 99;
@@ -936,7 +1004,7 @@ class Sprite {
   // bubble: pops into little bubbles, then floats back together
   pop() {
     if (this.popped) return; this.popped = true; this.popT = 0; this.ptr = null; this.state = 'idle'; Snd.popB(1);
-    bubblesP(this.x, this.cy, 14); sparks(this.x, this.cy, 6, this.r * 0.6); ringP(this.x, this.cy, this.r * 1.4, 'rgba(200,235,255,0.9)');
+    popFx(this.x, this.cy, this.r);
   }
   updatePop(dt) {
     if (!this.popped) return; this.popT += dt;
@@ -950,16 +1018,48 @@ class Sprite {
     if (this.r < baseR * 0.5 || !slotFree.length || activeCount() >= MAXS + 2) { this.impulse(rand(-200, 200), 150); Snd.plink(0.8); return false; }
     const nr = this.r * 0.72, off = this.r * 0.55;
     const c = new Sprite(this.x + off, this.y, { mat: 'mercury', r: nr, col: this.col, state: 'idle', e: 1 }); c.walls(true);
-    c.vx = 170; c.vz = 160; c.mergeCD = 1.3; c.mood = 'surprised'; c.moodT = 0.6; sprites.push(c);
-    this.setRadius(nr); this.x -= off; this.vx = -170; this.vz = 160; this.mergeCD = 1.3; this.mood = 'surprised'; this.moodT = 0.6; this.walls(true); this.resetInertia();
+    c.vx = 170; c.vz = 160; c.mergeCD = 3; c.mood = 'surprised'; c.moodT = 0.6; sprites.push(c);
+    this.setRadius(nr); this.x -= off; this.vx = -170; this.vz = 160; this.mergeCD = 3; this.mood = 'surprised'; this.moodT = 0.6; this.walls(true); this.resetInertia();
     Snd.plip(); drops(this.x + off, this.cy, 6, [0.85, 0.88, 0.95]); sparks(this.x + off, this.cy, 5, 10);
     return true;
   }
   // butter: softens in the sun, firms up at night
   updateMelt(dt) {
     if (this.mat !== 'butter') return;
-    this.melt = clamp(this.melt + (night < 0.5 ? dt / 28 : -dt / 6), 0, 1);
-    if (!this.pile) { this.tsx = 1 + 0.16 * this.melt; this.tsy = 1 - 0.22 * this.melt; this.poseRate = 2; }
+    this.sunMelt = clamp(this.sunMelt + (night < 0.5 ? dt / 28 : -dt / 6), 0, 1);
+    this.meltIdle += dt; if (this.meltIdle > 2.5) this.tapMelt = Math.max(0, this.tapMelt - dt / (night < 0.5 ? 14 : 5));
+    const m = clamp(this.sunMelt * 0.6 + this.tapMelt, 0, 1); this.melt = m;
+    const q = clamp((m - 0.55) / 0.45, 0, 1), pud = q * q * (3 - 2 * q);
+    if (!this.pile) { this.tsx = 1 + 0.12 * m + 0.32 * pud; this.tsy = 1 - 0.16 * m - 0.3 * pud; this.poseRate = 2.5; }
+    if (pud > 0.5 && !this.puddle) { this.puddle = true; Snd.splort(0.7); this.mood = 'giggle'; this.moodT = 1.2; drops(this.x, this.y - this.r * 0.2, 8, this.col); }
+    if (pud < 0.2) this.puddle = false;
+    if (pud > 0.3 && this.z <= 0 && Math.random() < dt * 3) { const g = toGrid(this.x, this.y); stamp(g[0], g[1], 0, 0, this.r / cellPx() * (0.6 + 0.6 * pud), 0, 0, mix(this.col, [1, 1, 1], 0.2), 0.08); }
+  }
+  // ice: cracks a little more with every tap, then shatters into smaller cubes
+  shatter() {
+    this.crack = 0; Snd.shatter(1); shards(this.x, this.cy, 22, this.col); sparks(this.x, this.cy, 12, this.r); ringP(this.x, this.cy, this.r * 1.5, 'rgba(220,245,255,0.9)');
+    if (this.r >= baseR * 0.6 && slotFree.length >= 2 && activeCount() < MAXS + 2) {
+      const nr = this.r * 0.62;
+      for (const k of [-1, 1]) { const c = new Sprite(this.x + k * this.r * 0.7, this.y + rand(-10, 10), { mat: 'ice', r: nr, col: this.col, state: 'idle', e: 1 });
+        c.state = 'fly'; c.vx = k * 220; c.vz = 260; c.walls(true); c.mood = 'surprised'; c.moodT = 0.6; sprites.push(c); }
+      this.setRadius(nr); this.state = 'fly'; this.vz = 300; this.mood = 'surprised'; this.moodT = 0.6; this.snapShape(); this.resetInertia();
+    } else { this.dead = true; drops(this.x, this.cy, 10, [0.7, 0.9, 1]); }
+  }
+  // sand castle: two sand sprites build one; tapping it crumbles it back into the two
+  makeCastle(other) {
+    this.castle = { parts: [{ col: this.col, r: this.r }, { col: other.col, r: other.r }], hits: 0 };
+    this.cols = [this.col, other.col]; this.col = mix(this.col, other.col, 0.5); this.flagCol = pick([[1, 0.35, 0.5], [1, 0.75, 0.2], [0.35, 0.6, 1], [0.6, 0.4, 1]]);
+    this.form = 0; this.pressing = false; this.pile = false; this.state = 'idle'; this.vx = this.vy = this.vz = 0; this.z = 0; this.spin = this.spinV = 0; this.dents = [];
+    this.r = Math.max(this.r, other.r) * 1.25; this.buildRest(); this.snapShape(); this.walls(true); this.resetInertia();
+    other.dead = true; other.ptr = null;
+    Snd.rebuild(); Snd.fanfare(); magnet(this, 25); sparks(this.x, this.cy, 16, this.r); this.mood = 'giggle'; this.moodT = 1.5; this.giggle(0.9, 0, 0.6);
+  }
+  splitCastle() {
+    if (!slotFree.length) { this.castle.hits = 3; return; }
+    const [p1, p2] = this.castle.parts, x0 = this.x; this.castle = null; this.cols = [p1.col]; this.col = p1.col;
+    this.r = p1.r; this.buildRest(); this.snapShape(); this.x = x0 - p1.r * 0.8; this.state = 'fly'; this.vx = -150; this.vz = 260; this.walls(true); this.resetInertia();
+    const s2 = new Sprite(x0 + p2.r * 0.8, this.y, { mat: 'sand', col: p2.col, r: p2.r, state: 'idle', e: 1 }); s2.state = 'fly'; s2.vx = 150; s2.vz = 260; s2.walls(true); sprites.push(s2);
+    Snd.pour(1); grains(x0, this.y - this.r * 0.5, 30, this.col, 1.1); this.mood = s2.mood = 'giggle'; this.moodT = s2.moodT = 1; this.giggle(0.9, 0, 0.2);
   }
   // path walking
   startWalk(pts) {
@@ -1043,7 +1143,7 @@ class Sprite {
     }
     this.walls(false);
     const air2 = !M.hover && (this.z > 0 || this.vz > 0);
-    if (this.state === 'idle' && !this.ptr && !air2 && !this.pressing && !this.pile) { this.hopT -= dt; if (this.hopT <= 0) this.idleAct(); if (this.age > this.life && activeCount() > 3) this.dive(); }
+    if (this.state === 'idle' && !this.ptr && !air2 && !this.pressing && !this.pile && !this.castle) { this.hopT -= dt; if (this.hopT <= 0) this.idleAct(); if (this.age > this.life && activeCount() > 3) this.dive(); }
   }
   throwFrom(p) {
     const h = p.hist; let vx = 0, vy = 0;
@@ -1058,6 +1158,7 @@ class Sprite {
   dive() { if (this.state === 'walk') this.endWalk(false); this.state = 'dive'; this.st = 0; Snd.bye(); this.mood = 'happy'; this.arms(0.6); addWhirl(this.x, this.y, this.r * 1.3, 0.2, 0.8, 0.004); }
   update(dt) {
     const M = this.M; this.age += dt; this.st += dt; this.mergeCD -= dt; this.walkCD -= dt;
+    if (this.crack > 0) { this.crackT += dt; if (this.crackT > 4) this.crack = Math.max(0, this.crack - dt * 0.6); }
     this.blinkT -= dt; if (this.blinkT < 0) { this.blinking = 0.13; this.blinkT = rand(2, 5.5); } if (this.blinking > 0) this.blinking -= dt;
     if (this.moodT > 0) { this.moodT -= dt; if (this.moodT <= 0) this.mood = 'happy'; }
     if (this.armHold > 0) this.armHold -= dt; else this.armT = 0;
@@ -1080,7 +1181,7 @@ class Sprite {
     }
     for (let i = this.dents.length - 1; i >= 0; i--) { const d = this.dents[i]; if (!d.hold) { d.depth *= Math.exp(-dt * M.dentDecay * (this.mat === 'butter' ? 1 - 0.7 * this.melt : 1)); if (d.depth < 0.02) this.dents.splice(i, 1); } }
     // sand: heap at rest, ball when picked up or squeezed
-    if (this.mat === 'sand') { const want = (this.state === 'held' || this.pressing) && !this.pile ? 1 : 0;
+    if (this.mat === 'sand') { const want = (this.state === 'held' || this.pressing) && !this.pile && !this.castle ? 1 : 0;
       const prev = this.form; this.form += (want - this.form) * Math.min(1, dt * (want ? 7 : 2.2));
       if (prev > 0.6 && this.form <= 0.6 && thr('slump', 300)) { Snd.pour(0.35); grains(this.x, this.y - this.r * 0.4, 8, this.col, 0.4); } }
     this.updatePile(dt); this.updatePop(dt); this.updateMelt(dt);
@@ -1122,7 +1223,9 @@ class Sprite {
     const du = this.dentU; du.fill(0); this.dents.forEach((d, k) => { du[k * 4] = d.u; du[k * 4 + 1] = d.v; du[k * 4 + 2] = d.depth; du[k * 4 + 3] = d.w; });
     gl.uniform4fv(USP.uDents, du);
     const sx = (this.slot % SLOTS_X) * SLOT / ATLAS, sy = ((this.slot / SLOTS_X) | 0) * SLOT / ATLAS; gl.uniform4f(USP.uSlot, sx, sy, SLOT / ATLAS, SLOT / ATLAS);
-    if (this.mat === 'butter') gl.uniform4f(USP.uP, this.melt, 0, 0, 0); else gl.uniform4f(USP.uP, this.fruit[0], this.fruit[1], this.fruit[2], this.fruit[3]);
+    if (this.mat === 'butter') gl.uniform4f(USP.uP, this.melt, 0, 0, 0); else if (this.mat === 'ice') gl.uniform4f(USP.uP, 0, this.crack / 5, 0, 0); else gl.uniform4f(USP.uP, this.fruit[0], this.fruit[1], this.fruit[2], this.fruit[3]);
+    const cu = this.colsU; cu.fill(0); this.cols.forEach((c, k) => { if (k < 4) { cu[k * 3] = c[0]; cu[k * 3 + 1] = c[1]; cu[k * 3 + 2] = c[2]; } });
+    gl.uniform3fv(USP.uCols, cu); gl.uniform1f(USP.uNCol, Math.min(4, this.cols.length));
     if (this.e < 0.999) gl.uniform4f(USP.uClip, this.x, this.y, this.r * 1.1 * (0.55 + 0.45 * Math.min(1, this.e * 2)), 1); else gl.uniform4f(USP.uClip, 0, 0, 1, 0);
   }
   bodyMesh(b) {
@@ -1134,10 +1237,10 @@ class Sprite {
         b[o++] = this.faceX[i] * rho; b[o++] = this.faceY[i] * rho; } }
   }
   armMesh(b, side) {
-    if (!this.M.arms) return false;
+    if (!this.M.arms || this.castle) return false;
     let k = clamp((1 - this.psy) / 0.5, 0, 1); if (this.mat === 'sand') k = Math.max(k, (1 - this.form) * 0.35);
     if (k > 0.9) return false;
-    const idx = side > 0 ? 9 : 23, sx = this.ax + this.px[idx], sy = this.ay + this.py[idx];
+    const idx = side > 0 ? Math.round(NB * 0.298) : Math.round(NB * 0.702), sx = this.ax + this.px[idx], sy = this.ay + this.py[idx];
     const ang = 0.55 + (-1.15 - 0.55) * this.arm + Math.sin(T * 14 + side) * 0.25 * this.arm, ra = this.r * (this.mat === 'butter' || this.mat === 'ice' ? 0.17 : 0.2) * (1 - k);
     const dx = Math.cos(ang) * side, dy = Math.sin(ang), cx = sx + dx * ra * 0.9, cy = sy + dy * ra * 0.9;
     let o = 0; b[o++] = cx; b[o++] = cy; b[o++] = 0; b[o++] = 0; b[o++] = 9; b[o++] = 9;
@@ -1166,6 +1269,8 @@ class Sprite {
   }
   drawFace(c, t) {
     const lx = this.lookX * 0.08, ly = this.lookY * 0.06, ey = -0.08 + ly, ex = 0.3, my = 0.22 + ly * 0.5, mx = lx * 0.6, dark = '#2a1630', mood = this.mood;
+    if (this.castle) { c.fillStyle = 'rgba(80,45,30,0.55)'; c.beginPath(); c.moveTo(-0.16, 0.78); c.lineTo(-0.16, 0.55); c.arc(0, 0.55, 0.16, Math.PI, 0); c.lineTo(0.16, 0.78); c.closePath(); c.fill();
+      for (const sd of [-1, 1]) { c.beginPath(); c.moveTo(sd * 0.82 - 0.06, -0.2); c.lineTo(sd * 0.82 - 0.06, -0.32); c.arc(sd * 0.82, -0.32, 0.06, Math.PI, 0); c.lineTo(sd * 0.82 + 0.06, -0.2); c.closePath(); c.fill(); } }
     c.fillStyle = 'rgba(255,105,150,0.5)';
     c.beginPath(); c.ellipse(-0.52 + lx * 0.5, 0.14, 0.14, 0.085, 0, 0, TAU); c.fill(); c.beginPath(); c.ellipse(0.52 + lx * 0.5, 0.14, 0.14, 0.085, 0, 0, TAU); c.fill();
     c.fillStyle = dark; c.strokeStyle = dark; c.lineCap = 'round'; c.lineJoin = 'round'; c.lineWidth = 0.07;
@@ -1224,7 +1329,7 @@ function updateWave(dt) {
     for (let y = 0; y < GH; y++) { const i = y * GW + x, v = (y + 0.5) / GH, c = freshColor(u, v, wave.seed);
       rA[i] += (c[0] - rA[i]) * k; gA[i] += (c[1] - gA[i]) * k; bA[i] += (c[2] - bA[i]) * k; hA[i] += (baseH(u, v, wave.seed) + crest - hA[i]) * k; dA[i] *= 1 - k * 0.5; } }
   const fxp = TX + f * TW; if (f > 0 && f < 1) for (let i = 0; i < 3; i++) sparks(fxp, TY + rand(0, TH), 1, 6);
-  for (const s of sprites) if (!wave.hit.has(s) && s.x < fxp && (s.state === 'idle' || s.state === 'fly') && !s.ptr && !s.pile && !s.popped) {
+  for (const s of sprites) if (!wave.hit.has(s) && s.x < fxp && (s.state === 'idle' || s.state === 'fly') && !s.ptr && !s.pile && !s.popped && !s.castle) {
     wave.hit.add(s); if (!s.M.hover) s.vz = rand(300, 400); s.vx += 140; s.state = 'fly'; s.mood = 'giggle'; s.moodT = 1; s.arms(1); if (thr('wg', 180)) s.giggle(0.7); }
   if (wave.t >= wave.dur) { seed = wave.seed; wave = null; }
 }
@@ -1265,7 +1370,7 @@ function onUp(e, cancel) {
 const trails = [];
 function assignPath(pts) {
   let best = null, bd = 330, rev = false; const a = pts[0], z = pts[pts.length - 1];
-  for (const s of sprites) { if (s.state !== 'idle' || s.ptr || s.pressing || s.pile || s.popped || s.walkCD > 0 || (!s.M.hover && s.z > 30)) continue;
+  for (const s of sprites) { if (s.state !== 'idle' || s.ptr || s.pressing || s.pile || s.popped || s.castle || s.walkCD > 0 || (!s.M.hover && s.z > 30)) continue;
     const d0 = Math.hypot(s.x - a.x, s.y - a.y), d1 = Math.hypot(s.x - z.x, s.y - z.y); if (d0 < bd) { bd = d0; best = s; rev = false; } if (d1 < bd) { bd = d1; best = s; rev = true; } }
   if (!best) return;
   const path = rev ? pts.slice().reverse() : pts.slice(), tr = { pts: path, idx: 0, done: false, fade: 1 };
@@ -1299,16 +1404,35 @@ function drawLinks(c) {
     c.lineCap = 'round'; c.strokeStyle = g; c.lineWidth = th; c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo(mx, my, bx, by); c.stroke();
     c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = th * 0.25; c.beginPath(); c.moveTo(ax, ay - th * 0.2); c.quadraticCurveTo(mx, my - th * 0.25, bx, by - th * 0.2); c.stroke(); }
 }
-function mergeMerc(a, b) {
-  const big = a.r >= b.r ? a : b, small = big === a ? b : a, A = a.r * a.r, B = b.r * b.r;
-  big.x = (a.x * A + b.x * B) / (A + B); big.y = (a.y * A + b.y * B) / (A + B);
-  big.setRadius(Math.min(Math.sqrt(A + B), baseR * 1.4)); big.walls(true); big.resetInertia(); big.impulse(0, 220); big.mergeCD = 0.6;
-  big.mood = 'giggle'; big.moodT = 1; big.giggle(0.6, 0, 0.15); small.dead = true; small.e = 0; Snd.blop(); sparks(big.x, big.cy, 8, big.r * 0.8);
+const colorClose = (c, d) => Math.abs(c[0] - d[0]) + Math.abs(c[1] - d[1]) + Math.abs(c[2] - d[2]) < 0.15;
+function mergeMerc(a, b, keepA = false) {
+  const big = keepA ? a : (a.r >= b.r ? a : b), small = big === a ? b : a, A = a.r * a.r, B = b.r * b.r;
+  if (!keepA) { big.x = (a.x * A + b.x * B) / (A + B); big.y = (a.y * A + b.y * B) / (A + B); }
+  big.setRadius(Math.min(Math.sqrt(A + B), baseR * 2.2)); big.walls(true); big.resetInertia(); big.impulse(0, 220); big.mergeCD = 0.4;
+  big.mood = 'giggle'; big.moodT = 1; big.giggle(0.6, 0, 0.15); small.dead = true; small.e = 0; small.ptr = null; Snd.blop(); sparks(big.x, big.cy, 8, big.r * 0.8);
+}
+// jelly / marshmallow: two different colours make one multi-coloured sprite
+function mergeColors(keep, gone) {
+  const cols = keep.cols.slice(); for (const c of gone.cols) if (!cols.some(d => colorClose(c, d))) cols.push(c);
+  keep.cols = cols.slice(-4); keep.col = keep.cols.reduce((a, c) => [a[0] + c[0] / keep.cols.length, a[1] + c[1] / keep.cols.length, a[2] + c[2] / keep.cols.length], [0, 0, 0]);
+  keep.setRadius(Math.min(Math.sqrt(keep.r * keep.r + gone.r * gone.r) * 0.85, baseR * 1.6)); keep.walls(true); keep.impulse(0, 200);
+  gone.dead = true; gone.ptr = null; MSND[keep.mat].release(); Snd.chimes([1046.5, 1318.5, 1568, 2093], 0.06, 0.09);
+  hearts(keep.x, keep.cy - keep.r * 0.5, 5); sparks(keep.x, keep.cy, 14, keep.r); keep.giggle(1, 5, 0.2); keep.mood = 'giggle'; keep.moodT = 1.4;
+}
+// dragging a sprite onto another of the same material
+function tryMerge(h, o) {
+  if (o.dead || o.state === 'held' || o.state === 'peek' || o.state === 'emerge' || o.state === 'dive' || o.popped) return false;
+  switch (h.mat) {
+    case 'mercury': mergeMerc(h, o, true); return true;
+    case 'jelly': case 'marsh': if (o.cols.some(c => !h.cols.some(d => colorClose(c, d)))) { mergeColors(h, o); return true; } return false;
+    case 'sand': if (!h.castle && !o.castle && !o.pile && !h.pile && slotFree.length >= 0) { o.makeCastle(h); return true; } return false;
+  }
+  return false;
 }
 function sandTap(x, y) {
   const g = toGrid(x, y); stamp(g[0], g[1], 0, 0, brushR() * 0.7, 0.06, 0, paintColor(), 0.7); grains(x, y, 10, sandColorAt(x, y), 0.8); ringP(x, y, 26); Snd.pff();
   let best = null, bd = 340;
-  for (const s of sprites) if (s.state === 'idle' && !s.ptr && s.z <= 0 && !s.pressing && !s.pile) { const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = s; } }
+  for (const s of sprites) if (s.state === 'idle' && !s.ptr && s.z <= 0 && !s.pressing && !s.pile && !s.castle) { const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = s; } }
   if (best && bd > best.r * 1.6) { const tx = x + (best.x > x ? 1 : -1) * best.r * 1.5; best.hopTo(clamp(tx, TX + best.r, TX + TW - best.r), clamp(y, TY + best.bodyH, TY + TH - best.r * 0.4), 240 * best.M.jump); best.hopT = rand(2, 4); best.arms(0.5); }
 }
 let swish = 0, whirlSnd = 0;
@@ -1404,6 +1528,11 @@ function drawFx() {
   drawTrails(c, lastDt);
   for (const s of sprites) s.drawLip(c);
   drawLinks(c);
+  for (const s of sprites) if (s.castle && s.e > 0.9) { let k = 0; for (let i = 1; i < NB; i++) if (s.py[i] < s.py[k]) k = i;
+    const x = s.ax + s.px[k], y = s.ay + s.py[k], h = s.r * 0.5, wv = Math.sin(T * 6) * s.r * 0.06;
+    c.strokeStyle = '#6b4a2e'; c.lineWidth = 2.5; c.lineCap = 'round'; c.beginPath(); c.moveTo(x, y + 2); c.lineTo(x, y - h); c.stroke();
+    c.fillStyle = css(s.flagCol); c.beginPath(); c.moveTo(x, y - h); c.quadraticCurveTo(x + s.r * 0.2, y - h - s.r * 0.04 + wv, x + s.r * 0.38, y - h + s.r * 0.08 + wv);
+    c.quadraticCurveTo(x + s.r * 0.18, y - h + s.r * 0.16 - wv * 0.5, x, y - h + s.r * 0.22); c.closePath(); c.fill(); }
   for (const p of ptrs.values()) if (p.mode === 'sand' && p.wstr > 0) drawSpiral(c, p.wx, p.wy, 14 + p.wstr * 34 + 10, Math.min(1, p.wstr * 1.6), -T * 7);
   for (const w of whirls) drawSpiral(c, w.x, w.y, w.R, 0.7 * w.life / w.max, -T * 8);
   drawParticles(c);
@@ -1416,10 +1545,14 @@ function loop(now) {
   for (let i = 0; i < sprites.length; i++) for (let j = i + 1; j < sprites.length; j++) {
     const a = sprites[i], b = sprites[j]; if (a.dead || b.dead || !a.visible() || !b.visible() || a.z > (a.M.hover ? 45 : 20) || b.z > (b.M.hover ? 45 : 20)) continue;
     const dx = b.x - a.x, dy = (b.y - a.y) * 1.4, d = Math.hypot(dx, dy) || 1, md = (a.r + b.r) * 0.85;
-    if (a.mat === 'mercury' && b.mat === 'mercury' && d < md * 0.95 && a.mergeCD <= 0 && b.mergeCD <= 0 && !a.ptr && !b.ptr && a.state !== 'walk' && b.state !== 'walk') { mergeMerc(a, b); continue; }
+    if (a.mat === b.mat && (a.state === 'held' || b.state === 'held') && d < md * 0.97) { const h = a.state === 'held' ? a : b; if (tryMerge(h, h === a ? b : a)) continue; }
+    if (a.mat === 'mercury' && b.mat === 'mercury' && a.mergeCD <= 0 && b.mergeCD <= 0 && !a.ptr && !b.ptr && a.state !== 'walk' && b.state !== 'walk') {
+      if (d < md * 0.95) { mergeMerc(a, b); continue; }
+      if (d < md * 2) { const nx = dx / d, ny = dy / d * 0.7; a.vx += nx * 170 * lastDt; a.vy += ny * 170 * lastDt; b.vx -= nx * 170 * lastDt; b.vy -= ny * 170 * lastDt; } }
     if (d < md && a.mat === 'slime' && b.mat === 'slime') linkSlime(a, b);
     if (d < md) { const push = (md - d) / 2, nx = dx / d, ny = dy / d;
-      if (a.state !== 'held') { a.x -= nx * push; a.y -= ny * push / 1.4; } if (b.state !== 'held') { b.x += nx * push; b.y += ny * push / 1.4; }
+      const af = a.state === 'held' || a.castle ? 0 : 1, bf = b.state === 'held' || b.castle ? 0 : 1, tot = af + bf || 1;
+      a.x -= nx * push * 2 * af / tot; a.y -= ny * push * 2 * af / tot / 1.4; b.x += nx * push * 2 * bf / tot; b.y += ny * push * 2 * bf / tot / 1.4;
       const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
       if (rv < -200) { if (a.state !== 'held') { a.vx += rv * nx * 0.5; a.vy += rv * ny * 0.5; } if (b.state !== 'held') { b.vx -= rv * nx * 0.5; b.vy -= rv * ny * 0.5; }
         if (thr('boop', 120)) { Snd.boop(Math.min(1, -rv / 800)); MSND[a.mat].land(0.5); } a.mood = b.mood = 'giggle'; a.moodT = b.moodT = 0.7; } }

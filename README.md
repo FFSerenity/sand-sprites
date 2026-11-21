@@ -16,14 +16,14 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 ## Materials
 | | Shape | Feel |
 |---|---|---|
-| 🏖️ Sand | little heap | rounds into a ball when picked up; splashes flat on hard landings and gathers itself back |
-| 🍮 Jelly | round, ears, horns… | see-through, wobbly, fruit inside, glows at night |
-| 🧈 Butter | small block | fingerprints stay; softens in the day, firms up at night |
+| 🏖️ Sand | little heap | rounds into a ball when picked up; drag two together to build a **sand castle**, tap the castle to crumble it back |
+| 🍮 Jelly | round, ears, horns… | see-through, wobbly, fruit inside; drag two colours together for a **layered rainbow jelly** |
+| 🧈 Butter | small block | fingerprints stay; **keep tapping and it melts** into a shiny puddle, then firms up again |
 | 🟢 Slime | droopy blob | stretchy; two slimes stick together with a gooey strand |
-| 🫧 Bubble | sphere | floats; pops when squeezed and drifts back together |
-| ☁️ Marshmallow | cylinder | memory-foam squish, sugar dust |
-| 🧊 Ice | cube | hard, slides far, clinks |
-| 🪩 Mercury | droplet | mirror surface; splits into droplets that merge again |
+| 🫧 Bubble | sphere | floats; squeeze it to **POP!**, then it drifts back together |
+| ☁️ Marshmallow | cylinder | memory-foam squish; drag two colours together for a **swirled marshmallow** |
+| 🧊 Ice | cube | slides far; **each tap cracks it**, the fifth shatters it into little cubes |
+| 🪩 Mercury | droplet | mirror surface; splits into droplets — **drag them together to merge**, bigger and bigger |
 
 Sprites are soft bodies (a ring of springs keeping shape, volume and curvature) rendered with WebGL shaders.
 All graphics and sounds are generated in code; the only image files are the app icons.
