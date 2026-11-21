@@ -43,7 +43,7 @@ body{position:fixed;inset:0}
 #count .ic{display:inline-flex;width:1.6em;height:1.6em;border-radius:50%;align-items:center;justify-content:center;background:linear-gradient(180deg,#ffe27a,#ffb23f);font-size:.85em}
 #count.bump{animation:bump .4s}
 @keyframes bump{40%{transform:scale(1.18)}}
-#picker{position:fixed;display:flex;gap:14px;padding:14px 16px 26px;border-radius:30px;background:rgba(60,30,85,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.35);--m:clamp(62px,10vmin,92px);
+#picker{position:fixed;display:grid;grid-template-columns:repeat(4,var(--m));gap:30px 14px;padding:14px 16px 32px;border-radius:30px;background:rgba(60,30,85,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.35);--m:clamp(56px,9vmin,82px);
   transform-origin:100% 100%;transform:scale(.4);opacity:0;pointer-events:none;transition:transform .22s cubic-bezier(.3,1.6,.5,1),opacity .15s}
 #picker.open{transform:scale(1);opacity:1;pointer-events:auto}
 .mbtn{--b:var(--m)}
@@ -80,7 +80,7 @@ body{position:fixed;inset:0}
 </div>
 <div id="start">
   <div class="title">Sand Sprites</div>
-  <div class="sub">v2 preview · Jelly &amp; Sand</div>
+  <div class="sub">v2 preview · 8 materials</div>
   <button id="play">▶ Play</button>
 </div>
 <div id="nogl">This game needs WebGL.<br>Please open it in Safari or Chrome.</div>
@@ -314,33 +314,30 @@ void main(){
   if (uClip.w > 0.5) { float dx=(vCss.x-uClip.x)/uClip.z; float ly=uClip.y+sqrt(max(0.0,1.0-dx*dx))*uR*0.2; if (vCss.y > ly) discard; }
   float hz = sqrt(max(0.0, 1.0 - rho*rho));
   vec3 N = vec3(vDisk*0.92, max(hz, 0.08));
-  float dentSum = 0.0;
-  for (int k=0;k<6;k++){ vec4 d=uDents[k]; if (d.z>0.0){ vec2 o=vFace-d.xy; float w2=d.w*d.w; float e=exp(-dot(o,o)/w2); N.xy -= o/w2*2.0*e*d.z*0.35; dentSum += e*d.z; } }
+  float dentSum = 0.0, ridge = 0.0;
+  for (int k=0;k<6;k++){ vec4 d=uDents[k]; if (d.z>0.0){ vec2 o=vFace-d.xy; float w2=d.w*d.w; float e=exp(-dot(o,o)/w2);
+    N.xy -= o/w2*2.0*e*d.z*0.35; dentSum += e*d.z; ridge += sin(length(o)/d.w*30.0)*e*min(d.z,1.0); } }
   N = normalize(N);
   float diff = max(dot(N, LIGHT), 0.0);
   vec3 Hh = normalize(LIGHT + vec3(0.0,0.0,1.0));
   float nh = max(dot(N, Hh), 0.0);
-  vec3 col; vec3 spec = vec3(0.0); float faceK = 1.0;
-  if (uMat < 0.5) {
-    // ---- SAND: matte, grains that move with the body, crumbly edge ----
+  vec3 col = uCol; vec3 spec = vec3(0.0); float faceK = 1.0; float m = uMat;
+  if (m < 0.5) {
+    // SAND: matte grains that move with the body, crumbly edge
     vec2 gp = vFace.x > 5.0 ? floor(vCss / 1.5) : floor(vFace * uR / 1.5 + uSeed * 13.0);
     float n1 = hash(gp), n2 = hash(gp + 11.3), n3 = hash(gp + 37.1);
     vec3 Ng = normalize(N + vec3((n1-0.5)*0.55, (n2-0.5)*0.55, 0.0));
     float dg = max(dot(Ng, LIGHT), 0.0);
     col = uCol * (0.46 + 0.74*dg) * (0.92 + 0.16*n1);
-    col *= 0.90 + 0.10*hz;
-    col *= 1.0 - 0.25*clamp(dentSum,0.0,1.0);
-    float tw = step(0.972, n3) * pow(max(0.0, sin(uTime*(1.5+n1*2.0)+n2*60.0)), 10.0);
-    spec = vec3(tw*0.9);
-    float edge = smoothstep(0.78, 1.0, rho);
-    if (n2 < edge*0.9) mask = 0.0;
+    col *= (0.90 + 0.10*hz) * (1.0 - 0.25*clamp(dentSum,0.0,1.0));
+    spec = vec3(step(0.972, n3) * pow(max(0.0, sin(uTime*(1.5+n1*2.0)+n2*60.0)), 10.0) * 0.9);
+    if (n2 < smoothstep(0.78, 1.0, rho)*0.9) mask = 0.0;
     col = mix(col, col*vec3(.36,.38,.62)+uCol*0.10, uNight*0.85);
     faceK = 0.92;
-  } else if (uMat < 1.5) {
-    // ---- JELLY: see-through, refracts the sand, glossy, fruit + bubbles inside ----
+  } else if (m < 1.5) {
+    // JELLY: see-through, refracts the sand, glossy, fruit + bubbles inside
     float th = hz * (1.0 - 0.5*clamp(dentSum,0.0,1.0));
-    vec2 refr = N.xy * uR * (0.30 + 0.28*th);
-    vec3 bg = sandAt(vCss + refr);
+    vec3 bg = sandAt(vCss + N.xy * uR * (0.30 + 0.28*th));
     vec3 tint = uCol;
     col = bg * mix(vec3(1.0), tint*1.25, 0.72) + tint*0.16*hz;
     for (int k=0;k<4;k++){ float fk=float(k);
@@ -349,23 +346,88 @@ void main(){
       col += (smoothstep(br, br-0.018, bd) - smoothstep(br-0.03, br-0.05, bd)) * 0.45;
       col += smoothstep(0.02, 0.0, length(vFace - bc - vec2(-br*0.35, -br*0.35))) * 0.6; }
     if (uP.z > 0.0) {
-      vec2 fp = (vFace - uP.xy) / uP.z; float fd = length(fp);
-      float fm = smoothstep(1.0, 0.88, fd);
+      vec2 fp = (vFace - uP.xy) / uP.z; float fd = length(fp); float fm = smoothstep(1.0, 0.88, fd);
       vec3 fc = uP.w < 0.5 ? vec3(1.0,0.16,0.28) : (uP.w < 1.5 ? vec3(0.38,0.4,1.0) : vec3(1.0,0.62,0.12));
       float fl = 0.7 + 0.6*max(dot(normalize(vec3(fp, 0.7)), LIGHT), 0.0);
       col = mix(col, fc*fl, fm*0.9);
       col += fm * smoothstep(0.35, 0.0, length(fp - vec2(-0.35,-0.35))) * 0.5;
       if (uP.w < 0.5) col = mix(col, vec3(0.2,0.55,0.15), smoothstep(0.12,0.0,abs(fp.x+fp.y*0.25-0.05))*step(fp.y,-0.85)*step(-1.9,fp.y));
     }
-    float absorb = 1.0 - exp(-th*2.2);
-    col = mix(col, tint*0.95, absorb*0.5);
-    float fres = pow(1.0 - N.z, 2.5);
-    col = mix(col, mix(tint, vec3(1.0), 0.65), fres*0.55);
+    col = mix(col, tint*0.95, (1.0 - exp(-th*2.2))*0.5);
+    col = mix(col, mix(tint, vec3(1.0), 0.65), pow(1.0 - N.z, 2.5)*0.55);
     col += tint * pow(max(0.0, vDisk.y), 3.0) * 0.30 * hz;
     spec = vec3(pow(nh, 160.0)*1.6 + pow(nh, 28.0)*0.25);
     col = mix(col, col*vec3(.5,.52,.75) + tint*0.55, uNight*0.8);
+  } else if (m < 2.5) {
+    // BUTTER: waxy block, fingerprints stay, gets glossy when it melts (uP.x = melt)
+    float melt = uP.x;
+    float wrap = max((dot(N, LIGHT) + 0.35)/1.35, 0.0);
+    col = uCol * (0.58 + 0.52*wrap);
+    col += vec3(1.0,0.95,0.7) * 0.07 * (1.0 - hz);
+    col *= 1.0 - 0.07*ridge;
+    col *= 1.0 - 0.12*clamp(dentSum,0.0,1.0);
+    col *= 0.975 + 0.04*hash(floor(vFace * uR * vec2(0.35, 1.6) + uSeed*9.0));
+    col = mix(col, col*vec3(1.0,0.93,0.75), melt*0.25);
+    spec = vec3(pow(nh, mix(10.0, 70.0, melt)) * mix(0.22, 1.0, melt));
+    col = mix(col, col*vec3(.38,.38,.55)+uCol*0.06, uNight*0.85);
+  } else if (m < 3.5) {
+    // SLIME: thick, wet, semi-see-through, slow swirls and a little glitter
+    vec3 bg = sandAt(vCss + N.xy*uR*0.22);
+    float sw = sin(vFace.x*6.0 + sin(vFace.y*5.0 + uTime*1.3)*1.5 + uTime*0.7);
+    vec3 tint = uCol*(0.86 + 0.14*sw);
+    col = mix(bg*tint*1.15, tint*0.78, (1.0 - exp(-hz*3.5))*0.78);
+    vec2 gq = floor(vFace*uR/2.2 + uSeed*5.0);
+    col += step(0.982, hash(gq)) * (0.5 + 0.5*sin(uTime*3.0 + hash(gq+3.0)*30.0)) * 0.7;
+    col = mix(col, tint + 0.25, pow(1.0 - N.z, 2.2)*0.35);
+    spec = vec3(pow(nh, 90.0)*1.3 + pow(nh, 12.0)*0.12 + pow(max(dot(N, normalize(vec3(0.6,-0.2,0.8))),0.0), 60.0)*0.35);
+    col = mix(col, col*vec3(.45,.48,.7) + tint*0.5, uNight*0.85);
+  } else if (m < 4.5) {
+    // BUBBLE: thin rainbow film you can see through
+    vec3 bg = sandAt(vCss + N.xy*uR*0.08);
+    float film = 1.0 - N.z;
+    float ph = film*5.0 + vFace.y*1.6 + uTime*0.6 + uSeed;
+    vec3 irid = 0.5 + 0.5*cos(6.2831*(ph + vec3(0.0, 0.33, 0.67)));
+    float rim = smoothstep(0.3, 1.0, rho);
+    col = bg*0.96 + irid*(0.10 + 0.6*rim*rim);
+    col = mix(col, vec3(1.0), smoothstep(0.93, 1.0, rho)*0.35);
+    spec = vec3(pow(nh, 220.0)*2.0 + pow(max(dot(N, normalize(vec3(0.45,0.5,0.75))),0.0), 90.0)*0.6);
+    col = mix(col, col*vec3(.42,.44,.66) + irid*0.25, uNight*0.8);
+    faceK = 0.9;
+  } else if (m < 5.5) {
+    // MARSHMALLOW: soft, powdery, matte
+    float wrap = max((dot(N, LIGHT) + 0.5)/1.5, 0.0);
+    col = uCol * (0.64 + 0.42*wrap);
+    col = mix(col, vec3(1.0), step(0.86, hash(floor(vFace*uR/1.2 + uSeed*7.0)))*0.32);
+    col *= 0.965 + 0.05*hash(floor(vFace*uR/3.0));
+    col += uCol*0.12*pow(1.0 - hz, 2.0);
+    col *= 1.0 - 0.1*clamp(dentSum,0.0,1.0);
+    spec = vec3(pow(nh, 8.0)*0.04);
+    col = mix(col, col*vec3(.4,.42,.6)+uCol*0.08, uNight*0.85);
+  } else if (m < 6.5) {
+    // ICE: clear cube with bevelled facets, frosty edges, glints
+    float ang = atan(vDisk.y, vDisk.x), segW = 6.2831853/8.0, sa = floor(ang/segW + 0.5)*segW;
+    vec3 Nf = rho < 0.5 ? normalize(vec3(N.xy*0.15, 1.0)) : normalize(vec3(vec2(cos(sa), sin(sa))*0.8*smoothstep(0.45,0.95,rho), 1.0));
+    vec3 bg = sandAt(vCss + Nf.xy*uR*0.6);
+    vec3 tint = mix(vec3(0.78,0.93,1.0), uCol, 0.45);
+    col = bg*tint*1.02 + vec3(0.07,0.11,0.15);
+    float fr = smoothstep(0.72, 1.0, rho)*(0.55 + 0.45*hash(floor(vFace*uR)));
+    col = mix(col, vec3(0.93,0.97,1.0), fr*0.5);
+    float cr = abs(sin(vFace.x*7.0 + vFace.y*3.0 + uSeed*5.0) + 0.3*sin(vFace.y*11.0 - uSeed));
+    col += smoothstep(0.04, 0.0, cr)*0.22*step(rho, 0.85);
+    vec2 gq = floor(vFace*uR/2.0);
+    spec = vec3(pow(max(dot(Nf, Hh),0.0), 120.0)*1.8 + step(0.975, hash(gq+uSeed))*pow(max(0.0, sin(uTime*3.0 + hash(gq)*40.0)), 12.0)*1.2);
+    col = mix(col, col*vec3(.45,.55,.85) + vec3(0.08,0.18,0.32), uNight*0.8);
   } else {
-    col = uCol * (0.45 + 0.7*diff); spec = vec3(pow(nh, 60.0)*0.6);
+    // MERCURY: liquid mirror that reflects the sand around it
+    vec3 env = sandAt(vCss - N.xy*uR*1.6);
+    col = mix(env, vec3(0.82,0.85,0.92), 0.45)*0.85 + vec3(0.08,0.09,0.11);
+    col *= 0.55 + 0.6*smoothstep(0.55, -0.55, N.y);
+    col += vec3(0.9,0.95,1.0)*smoothstep(0.08, 0.0, abs(N.y + 0.25))*0.25*hz;
+    col = mix(col, vec3(0.93,0.96,1.0), pow(1.0 - N.z, 1.6)*0.55);
+    col *= mix(vec3(1.0), uCol, 0.18);
+    spec = vec3(pow(nh, 220.0)*2.2 + pow(nh, 30.0)*0.3);
+    col = mix(col, col*vec3(.45,.48,.72), uNight*0.7);
+    faceK = 0.95;
   }
   vec2 fuv = vFace / 2.6 + 0.5;
   if (uFaceOn > 0.0 && fuv.x > 0.01 && fuv.y > 0.01 && fuv.x < 0.99 && fuv.y < 0.99) {
@@ -375,6 +437,7 @@ void main(){
   col += spec;
   gl_FragColor = vec4(col * mask, mask);
 }`;
+
 let gl = null, progSand, progSh, progSp, bufTri, bufSh, bufSp, ibSp, glTexA, glTexB, glTexFace, texW = 0, texH = 0, faceTexInit = false;
 const US = {}, USH = {}, USP = {};
 function mkProg(vs, fs, U, names) {
@@ -472,7 +535,7 @@ function renderGL() {
 // ---------- sound (synthesized) ----------
 const Snd = (() => {
   let ac = null, master, sfx, mus, nbuf, swG, swF, whG, whF, whO, whOG;
-  let sfxOn = true, musOn = true, nextBeat = 0, beat = 0, cur = 5;
+  let sfxOn = true, musOn = true, nextBeat = 0, beat = 0, cur = 5, giggleUntil = 0;
   try { const s = JSON.parse(localStorage.getItem('sandSpritesAudio') || '{}'); if (s.sfx === false) sfxOn = false; if (s.mus === false) musOn = false; } catch (e) {}
   const save = () => { try { localStorage.setItem('sandSpritesAudio', JSON.stringify({ sfx: sfxOn, mus: musOn })); } catch (e) {} };
   function init() {
@@ -521,7 +584,7 @@ const Snd = (() => {
     pour(v = 1) { if (!ok()) return; const t = now(); const f = noise(t, 0.95, 0.3 * v, 'bandpass', 2200, 0.6, 0.04); f.frequency.exponentialRampToValueAtTime(800, t + 0.9);
       for (let i = 0; i < 40; i++) noise(t + Math.pow(Math.random(), 1.6) * 0.9, 0.006, 0.12 * v * Math.random(), 'bandpass', 1500 + Math.random() * 2500, 1.2, 0.001); },
     rebuild() { if (!ok()) return; const t = now(); const f = noise(t, 0.12, 0.22, 'bandpass', 500, 1.2, 0.8); f.frequency.exponentialRampToValueAtTime(3200, t + 0.85); S.chimes([1046.5, 1318.5, 1568, 2093], 0.06, 0.08, 0.78); },
-    giggle(voice = 850, v = 1, n = 0, delay = 0) { if (!ok()) return; const t = now() + delay; n = n || 3 + ((Math.random() * 3) | 0);
+    giggle(voice = 850, v = 1, n = 0, delay = 0) { if (!ok()) return; const t = now() + delay; if (t < giggleUntil) return; n = n || 3 + ((Math.random() * 3) | 0); giggleUntil = t + n * 0.105 + 0.55;
       for (let i = 0; i < n; i++) { const tt = t + i * 0.105, f = voice * (1.12 - i * 0.05) * (0.97 + Math.random() * 0.06);
         const o = osc('triangle', f, tt, 0.085, 0.15 * v, 0.008); o.frequency.exponentialRampToValueAtTime(f * 0.78, tt + 0.08);
         const o2 = osc('sine', f * 2.01, tt, 0.06, 0.05 * v, 0.008); o2.frequency.exponentialRampToValueAtTime(f * 1.6, tt + 0.06); } },
@@ -534,6 +597,28 @@ const Snd = (() => {
     pff() { if (!ok()) return; const t = now(); noise(t, 0.1, 0.18, 'bandpass', 2300, 1.2); noise(t, 0.14, 0.16, 'lowpass', 500, 0.8); },
     wave() { if (!ok()) return; const t = now(); const f = noise(t, 1.3, 0.34, 'bandpass', 300, 0.9, 0.55); f.frequency.exponentialRampToValueAtTime(1800, t + 0.7); f.frequency.exponentialRampToValueAtTime(450, t + 1.8); S.chimes([784, 880, 1046.5, 1174.7, 1318.5, 1568], 0.1, 0.07, 0.3); },
     night() { S.chimes([1568, 1318.5, 1046.5, 784, 659.3], 0.13, 0.09); },
+    smoosh(v = 1, long = false) { if (!ok()) return; const t = now(), d = long ? 0.4 : 0.16; noise(t, d, 0.32 * v, 'lowpass', 650, 0.8, 0.02); const o = osc('sine', 150, t, d, 0.16 * v, 0.02); o.frequency.exponentialRampToValueAtTime(95, t + d);
+      if (long) { const f = noise(t + 0.05, 0.3, 0.12 * v, 'bandpass', 500, 4, 0.05); f.frequency.exponentialRampToValueAtTime(300, t + 0.35); } },
+    peel(v = 1) { if (!ok()) return; const t = now(); for (let i = 0; i < 7; i++) noise(t + i * 0.012 + Math.random() * 0.008, 0.005, (0.06 + Math.random() * 0.08) * v, 'highpass', 3500 + Math.random() * 2500, 0.7, 0.001);
+      osc('sine', 1800, t + 0.09, 0.03, 0.05 * v, 0.002); S.pop(500, 0.12 * v); },
+    blorp(v = 1) { if (!ok()) return; const t = now(); const f = noise(t, 0.25, 0.4 * v, 'bandpass', 650, 8, 0.01); f.frequency.exponentialRampToValueAtTime(180, t + 0.24);
+      const o = osc('sine', 160, t, 0.25, 0.18 * v, 0.01); o.frequency.exponentialRampToValueAtTime(85, t + 0.22); vib(o, t, 9, 25, 0.25); },
+    splort(v = 1) { if (!ok()) return; const t = now(); const f = noise(t, 0.3, 0.45 * v, 'bandpass', 900, 5, 0.005); f.frequency.exponentialRampToValueAtTime(220, t + 0.28); noise(t, 0.15, 0.2 * v, 'lowpass', 500, 0.8); },
+    stretch(v = 1) { if (!ok()) return; const t = now(); const f = noise(t, 0.55, 0.25 * v, 'bandpass', 250, 7, 0.08); f.frequency.exponentialRampToValueAtTime(900, t + 0.5);
+      const o = osc('sine', 90, t, 0.5, 0.1 * v, 0.08); o.frequency.exponentialRampToValueAtTime(160, t + 0.5); vib(o, t, 7, 15, 0.5); },
+    thwip(v = 1) { if (!ok()) return; const t = now(); const o = osc('sine', 900, t, 0.12, 0.2 * v, 0.003); o.frequency.exponentialRampToValueAtTime(220, t + 0.1); S.bubbles(3, 0.5, false, 0.08); },
+    softBoing(v = 1) { if (!ok()) return; const t = now(), f = rand(520, 680); const o = osc('sine', f, t, 0.4, 0.16 * v, 0.01); o.frequency.exponentialRampToValueAtTime(f * 1.25, t + 0.35); vib(o, t, 9, f * 0.06, 0.4); osc('sine', f * 2.5, t, 0.15, 0.03 * v, 0.005); },
+    popB(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.035, 0.5 * v, 'highpass', 1800, 0.7, 0.001); const o = osc('sine', 1300, t, 0.06, 0.2 * v, 0.001); o.frequency.exponentialRampToValueAtTime(420, t + 0.05); S.bubbles(5, 0.5, false, 0.05); },
+    pfff(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.2, 0.3 * v, 'lowpass', 900, 0.7, 0.015); osc('sine', 120, t, 0.18, 0.12 * v, 0.02); const o = osc('sine', 1500, t + 0.05, 0.08, 0.03 * v, 0.01); o.frequency.exponentialRampToValueAtTime(1800, t + 0.12); },
+    foam(v = 1) { if (!ok()) return; const t = now(); const f = noise(t, 0.8, 0.18 * v, 'lowpass', 500, 1, 0.25); f.frequency.exponentialRampToValueAtTime(250, t + 0.8); osc('sine', 100, t, 0.7, 0.06 * v, 0.2); },
+    fwump(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.3, 0.42 * v, 'lowpass', 800, 0.7, 0.02); const o = osc('sine', 170, t, 0.25, 0.2 * v, 0.02); o.frequency.exponentialRampToValueAtTime(80, t + 0.22); },
+    clink(v = 1) { if (!ok()) return; const t = now(), b = rand(1900, 2300); [1, 1.51, 2.03, 2.68].forEach((k, i) => osc('sine', b * k, t, 0.5 - i * 0.08, 0.11 * v / (1 + i * 0.6), 0.001)); noise(t, 0.01, 0.15 * v, 'highpass', 5000, 0.7, 0.001); },
+    crack(v = 1) { if (!ok()) return; const t = now(); for (let i = 0; i < 10; i++) noise(t + Math.random() * 0.18, 0.004 + Math.random() * 0.008, (0.08 + Math.random() * 0.15) * v, 'bandpass', 2000 + Math.random() * 3000, 3, 0.001); osc('sine', 300, t, 0.08, 0.08 * v, 0.002); },
+    plink(v = 1) { if (!ok()) return; const t = now(), b = rand(800, 1000); [1, 1.59, 2.5].forEach((k, i) => osc('sine', b * k, t, 0.3 - i * 0.06, 0.1 * v / (1 + i), 0.001)); const o = osc('sine', 220, t, 0.12, 0.12 * v, 0.003); o.frequency.exponentialRampToValueAtTime(120, t + 0.1); },
+    plip() { if (!ok()) return; const t = now(); for (let i = 0; i < 2; i++) { const tt = t + i * 0.09, o = osc('sine', 1600 - i * 300, tt, 0.1, 0.15, 0.002); o.frequency.exponentialRampToValueAtTime(600, tt + 0.08); } S.plink(0.6); },
+    blop(v = 1) { if (!ok()) return; const t = now(); const o = osc('sine', 280, t, 0.25, 0.3 * v, 0.005); o.frequency.exponentialRampToValueAtTime(620, t + 0.12); vib(o, t, 14, 40, 0.25); },
+    step(i) { if (!ok()) return; const t = now(), SC = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.7, 1318.5, 1568, 1760], L = SC.length, k = i % (2 * L - 2), idx = k < L ? k : 2 * L - 2 - k;
+      note(SC[idx], t, 0.07, 0.5); noise(t, 0.05, 0.06, 'lowpass', 600, 0.8); },
     day() { S.chimes([784, 1046.5, 1318.5, 1568, 2093], 0.09, 0.09); },
   };
   function musicTick() {
@@ -562,14 +647,18 @@ function grains(x, y, n, col, spd = 1) { for (let i = 0; i < n; i++) { const a =
 function sparks(x, y, n, spread = 30, col = null) { for (let i = 0; i < n; i++) addP({ t: 's', x: x + rand(-spread, spread), y: y + rand(-spread, spread), vx: rand(-40, 40), vy: rand(-90, -20), max: rand(0.6, 1.3), s: rand(3, 8), rot: rand(0, 1), col: col || pick(['#fff8e0', '#fff', '#ffe58a', '#ffd1f0', '#c9f3ff']) }); }
 function hearts(x, y, n) { for (let i = 0; i < n; i++) addP({ t: 'h', x: x + rand(-25, 25), y: y + rand(-20, 0), vx: rand(-30, 30), vy: rand(-110, -60), max: rand(0.9, 1.4), s: rand(7, 12), col: pick(['#ff6fa8', '#ff8fc0', '#ff5d8f', '#ffa3c7']) }); }
 function drops(x, y, n, col) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), s = rand(60, 200); addP({ t: 'd', x, y, z: rand(0, 10), vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.7, vz: rand(150, 380), max: 0.9, s: rand(3, 6), col: css(col, 0.75) }); } }
+function bubblesP(x, y, n) { for (let i = 0; i < n; i++) addP({ t: 'b', x: x + rand(-20, 20), y: y + rand(-20, 10), vx: rand(-30, 30), vy: rand(-90, -40), max: rand(0.8, 1.5), s: rand(4, 11), ph: rand(0, 6) }); }
+function fluff(x, y, n, col) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), s = rand(30, 110); addP({ t: 'f', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, max: rand(0.5, 0.9), s: rand(5, 11), col }); } }
 function ringP(x, y, R, col = 'rgba(255,255,255,0.8)') { addP({ t: 'r', x, y, s: R, max: 0.55, col }); }
 function magnet(s, n) { for (let i = 0; i < n; i++) { const a = rand(0, TAU), d = rand(1.2, 2.8) * s.r; addP({ t: 'm', x: s.x + Math.cos(a) * d, y: s.y - s.r * 0.8 + Math.sin(a) * d * 0.75, sp: s, k: rand(2.5, 5), max: 1.3, s: rand(1.6, 3.2), col: css(mix(s.col, [1, 1, 1], rand(-0.1, 0.25))) }); } }
 function updateParticles(dt) {
   for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; p.life += dt; if (p.life >= p.max) { P.splice(i, 1); continue; }
     if (p.t === 'g' || p.t === 'd') { p.vz -= 1100 * dt; p.z += p.vz * dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.z < 0) { P.splice(i, 1); continue; } }
     else if (p.t === 'o') { p.a += (2.5 + 160 / Math.max(8, p.rad)) * dt; p.rad *= Math.exp(-dt * 1.6); p.x = p.cx + Math.cos(p.a) * p.rad; p.y = p.cy + Math.sin(p.a) * p.rad * 0.75; if (p.rad < 4) { P.splice(i, 1); continue; } }
+    else if (p.t === 'b') { p.x += (p.vx + Math.sin(p.life * 8 + p.ph) * 20) * dt; p.y += p.vy * dt; }
+    else if (p.t === 'mb') { const tx = p.sp.x, ty = p.sp.cy; p.k += dt * 6; const k = Math.min(1, dt * p.k); p.x += (tx - p.x) * k; p.y += (ty - p.y) * k; if (Math.hypot(tx - p.x, ty - p.y) < 6) { P.splice(i, 1); continue; } }
     else if (p.t === 'm') { const tx = p.sp.x + rand(-0.5, 0.5) * p.sp.r, ty = p.sp.y - p.sp.r * 0.7; p.k += dt * 8; const k = Math.min(1, dt * p.k); p.x += (tx - p.x) * k; p.y += (ty - p.y) * k; if (Math.hypot(tx - p.x, ty - p.y) < 5) { P.splice(i, 1); continue; } }
-    else if (p.t !== 'r') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.98; }
+    else if (p.t !== 'r') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.98; if (p.t === 'f') { p.vx *= 0.94; p.vy *= 0.94; } }
   }
 }
 function starPath(c, x, y, s, rot) { c.beginPath(); for (let k = 0; k < 8; k++) { const a = rot + k * Math.PI / 4, rr = k % 2 ? s * 0.28 : s; c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } c.closePath(); }
@@ -579,6 +668,9 @@ function drawParticles(c) {
     if (p.t === 'g' || p.t === 'm') { c.globalAlpha = Math.min(1, a * 2); c.fillStyle = p.col; c.fillRect(p.x, p.y - (p.z || 0), p.s, p.s); }
     else if (p.t === 'o') { c.globalAlpha = Math.min(1, a * 3, p.rad / 12); c.fillStyle = p.col; c.fillRect(p.x, p.y, p.s, p.s); }
     else if (p.t === 'd') { c.globalAlpha = Math.min(1, a * 2); c.fillStyle = p.col; c.beginPath(); c.arc(p.x, p.y - p.z, p.s, 0, TAU); c.fill(); c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(p.x - p.s * 0.3, p.y - p.z - p.s * 0.3, p.s * 0.3, 0, TAU); c.fill(); }
+    else if (p.t === 'b' || p.t === 'mb') { c.globalAlpha = p.t === 'mb' ? 0.85 : a * 0.9; c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 1.5; c.beginPath(); c.arc(p.x, p.y, p.s, 0, TAU); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.8)'; c.beginPath(); c.arc(p.x - p.s * 0.35, p.y - p.s * 0.35, p.s * 0.22, 0, TAU); c.fill(); }
+    else if (p.t === 'f') { c.globalAlpha = a * 0.85; c.fillStyle = p.col; c.beginPath(); c.arc(p.x, p.y, p.s * (0.6 + k * 0.6), 0, TAU); c.fill(); }
     else if (p.t === 'h') { c.globalAlpha = Math.min(1, a * 1.6); c.fillStyle = p.col; heartPath(c, p.x, p.y, p.s * (0.7 + 0.3 * Math.sin(p.life * 12))); c.fill(); }
     else if (p.t === 'r') { c.globalAlpha = a * 0.8; c.strokeStyle = p.col; c.lineWidth = 3 * a + 1; c.beginPath(); c.ellipse(p.x, p.y, p.s * (0.3 + k * 1.2), p.s * (0.3 + k * 1.2) * 0.55, 0, 0, TAU); c.stroke(); } }
   c.globalCompositeOperation = 'lighter';
@@ -587,21 +679,68 @@ function drawParticles(c) {
 }
 
 // ---------- materials ----------
-// home: spring back to rest shape · edge: neighbour springs (local dents spread) · area: keeps volume · damp: how fast wobble dies
-// inertia: how much the body lags behind movement · follow: how tightly a dragged sprite follows the finger
+// home: spring back to rest shape · edge/bend: neighbour springs (local dents spread, zig-zags smoothed) · area: keeps volume
+// damp: how fast wobble dies · visc: smooths jitter · inertia: how much the body lags behind movement · follow: how tightly a dragged sprite follows the finger
+// friction: how fast it stops sliding · walk: path-walking speed · bob: hop height while walking
 const MATS = {
-  sand:  { id: 0, name: 'Sand',  ic: '🏖️', c: 'linear-gradient(180deg,#ffe3a8,#e2b064)', home: 330, edge: 700, area: 380, bend: 500, visc: 0.3, damp: 10, inertia: 0.3,  pressK: 800,  pokeK: 0.45, follow: 18, grabK: 260, jump: 0.9,  dentDecay: 0.7, dentW: 0.3 },
-  jelly: { id: 1, name: 'Jelly', ic: '🍮', c: 'linear-gradient(180deg,#ffb3c8,#ff5d8f)', home: 85,  edge: 240, area: 520, bend: 260, visc: 0.14, damp: 2.3, inertia: 0.75, pressK: 1150, pokeK: 1.0,  follow: 13, grabK: 170, jump: 1.15, dentDecay: 4.5, dentW: 0.32 },
+  sand:   { id: 0, name: 'Sand',        ic: '🏖️', c: 'linear-gradient(180deg,#ffe3a8,#e2b064)', home: 330, edge: 700, area: 380, bend: 500, visc: 0.3,  damp: 10, inertia: 0.3,  pressK: 300,  pokeK: 0.45, follow: 18, grabK: 260, jump: 0.9,  dentDecay: 0.7,  dentW: 0.3,  friction: 8,   walk: 170, bob: 3,  arms: true,  size: 1.0 },
+  jelly:  { id: 1, name: 'Jelly',       ic: '🍮', c: 'linear-gradient(180deg,#ffb3c8,#ff5d8f)', home: 85,  edge: 240, area: 520, bend: 260, visc: 0.14, damp: 2.3, inertia: 0.75, pressK: 1150, pokeK: 1.0, follow: 13, grabK: 170, jump: 1.15, dentDecay: 4.5,  dentW: 0.32, friction: 8,   walk: 230, bob: 12, arms: true,  size: 1.0 },
+  butter: { id: 2, name: 'Butter',      ic: '🧈', c: 'linear-gradient(180deg,#fff2b0,#f2cf5c)', home: 150, edge: 520, area: 450, bend: 600, visc: 0.35, damp: 9,  inertia: 0.35, pressK: 900,  pokeK: 0.5,  follow: 16, grabK: 200, jump: 0.7,  dentDecay: 0.04, dentW: 0.24, friction: 6,   walk: 140, bob: 2,  arms: true,  size: 1.0 },
+  slime:  { id: 3, name: 'Slime',       ic: '🟢', c: 'linear-gradient(180deg,#b6ff8a,#3fd16b)', home: 38,  edge: 110, area: 650, bend: 120, visc: 0.25, damp: 4.5, inertia: 0.9,  pressK: 1300, pokeK: 1.1,  follow: 3.2, grabK: 260, jump: 0.7, dentDecay: 1.2,  dentW: 0.35, friction: 7,   walk: 120, bob: 0,  arms: true,  size: 1.05 },
+  bubble: { id: 4, name: 'Bubble',      ic: '🫧', c: 'linear-gradient(180deg,#d9f4ff,#8fc8ff)', home: 70,  edge: 200, area: 600, bend: 300, visc: 0.1,  damp: 3,  inertia: 0.5,  pressK: 900,  pokeK: 0.8,  follow: 10, grabK: 150, jump: 1.0,  dentDecay: 5,    dentW: 0.3,  friction: 1.0, walk: 200, bob: 0,  arms: false, size: 0.95, hover: true },
+  marsh:  { id: 5, name: 'Marshmallow', ic: '☁️', c: 'linear-gradient(180deg,#fff,#ffcfe4)',    home: 70,  edge: 300, area: 400, bend: 400, visc: 0.45, damp: 13, inertia: 0.3,  pressK: 1400, pokeK: 0.6,  follow: 15, grabK: 200, jump: 0.9,  dentDecay: 0.9,  dentW: 0.4,  friction: 8,   walk: 210, bob: 9,  arms: true,  size: 1.0 },
+  ice:    { id: 6, name: 'Ice',         ic: '🧊', c: 'linear-gradient(180deg,#e6fbff,#86d6f2)', home: 900, edge: 1200, area: 400, bend: 900, visc: 0.3, damp: 16, inertia: 0.04, pressK: 200,  pokeK: 0.08, follow: 22, grabK: 0,   jump: 0.8,  dentDecay: 20,   dentW: 0.2,  friction: 1.2, walk: 260, bob: 0,  arms: true,  size: 0.9, noDent: true },
+  mercury:{ id: 7, name: 'Mercury',     ic: '🪩', c: 'linear-gradient(180deg,#f2f4f8,#a8afbd)', home: 28,  edge: 90,  area: 750, bend: 90,  visc: 0.28, damp: 5,  inertia: 0.95, pressK: 900,  pokeK: 1.2,  follow: 7,  grabK: 200, jump: 0.6,  dentDecay: 6,    dentW: 0.35, friction: 3,   walk: 200, bob: 0,  arms: false, size: 0.85 },
 };
-const AVAIL = ['jelly', 'sand'];
+const AVAIL = ['jelly', 'sand', 'butter', 'slime', 'bubble', 'marsh', 'ice', 'mercury'];
 const MSND = {
-  sand:  { tap: () => Snd.crunch(1), press: () => Snd.pour(1), knead: () => Snd.crunch(0.5), release: () => {}, land: v => Snd.crunch(v) },
-  jelly: { tap: () => Snd.bloing(1, rand(220, 300)), press: () => Snd.squelch(0.9), knead: () => Snd.squelch(0.45), release: () => { Snd.shlurp(0.8); Snd.bloing(0.8, rand(240, 300)); }, land: v => Snd.splat(v) },
+  sand:    { tap: () => Snd.crunch(1),            press: () => Snd.crunch(1.2),          knead: () => Snd.crunch(0.5),          release: () => Snd.pour(0.5),                                              land: v => Snd.crunch(v) },
+  jelly:   { tap: () => Snd.bloing(1, rand(220, 300)), press: () => Snd.squelch(0.9),    knead: () => Snd.squelch(0.45),        release: () => { Snd.shlurp(0.8); Snd.bloing(0.8, rand(240, 300)); },     land: v => Snd.splat(v) },
+  butter:  { tap: () => Snd.smoosh(0.8),          press: () => Snd.smoosh(1.1, true),    knead: () => Snd.smoosh(0.5),          release: () => Snd.peel(1),                                                land: v => Snd.smoosh(v) },
+  slime:   { tap: () => Snd.blorp(1),             press: () => Snd.squelch(1),           knead: () => Snd.blorp(0.5),           release: () => Snd.splort(1),                                              land: v => Snd.splort(v) },
+  bubble:  { tap: () => Snd.softBoing(1),         press: () => {},                       knead: () => {},                       release: () => {},                                                         land: v => Snd.softBoing(v * 0.6) },
+  marsh:   { tap: () => Snd.pfff(1),              press: () => Snd.foam(1),              knead: () => Snd.pfff(0.5),            release: () => Snd.fwump(1),                                               land: v => Snd.pfff(v) },
+  ice:     { tap: () => Snd.clink(1),             press: () => Snd.crack(1),             knead: () => Snd.crack(0.5),           release: () => Snd.clink(0.8),                                             land: v => Snd.clink(v) },
+  mercury: { tap: () => Snd.plink(1),             press: () => {},                       knead: () => {},                       release: () => {},                                                         land: v => Snd.plink(v * 0.8) },
 };
 const JELLY_COLS = [[0.95, 0.2, 0.35], [0.45, 0.85, 0.25], [0.2, 0.55, 1.0], [1.0, 0.55, 0.1], [0.62, 0.3, 0.95], [1.0, 0.8, 0.15], [1.0, 0.4, 0.65]];
+const SLIME_COLS = [[0.45, 0.95, 0.3], [0.75, 0.35, 1.0], [1.0, 0.35, 0.7], [0.25, 0.8, 1.0], [1.0, 0.85, 0.2]];
+const MARSH_COLS = [[1, 0.97, 0.97], [1, 0.82, 0.9], [0.85, 0.97, 0.9], [0.92, 0.88, 1], [1, 0.93, 0.8]];
+const ICE_COLS = [[0.7, 0.92, 1], [0.8, 0.95, 1], [0.75, 0.85, 1], [0.8, 1, 0.95]];
 function matColor(mat, x, y) {
-  if (mat === 'jelly') return pick(JELLY_COLS);
-  let c = mix(sandColorAt(x, y), pick(PAL), 0.3); const [h, s, l] = rgb2hsl(c[0], c[1], c[2]); return hsl2rgb(h, clamp(s * 1.1, 0.35, 0.85), clamp(l, 0.66, 0.84));
+  switch (mat) {
+    case 'jelly': return pick(JELLY_COLS);
+    case 'butter': return pick([[1, 0.9, 0.52], [1, 0.93, 0.62], [1, 0.87, 0.45]]);
+    case 'slime': return pick(SLIME_COLS);
+    case 'bubble': return [0.9, 0.95, 1];
+    case 'marsh': return pick(MARSH_COLS);
+    case 'ice': return pick(ICE_COLS);
+    case 'mercury': return pick([[0.9, 0.92, 0.98], [0.95, 0.92, 0.9], [0.9, 0.95, 0.95]]);
+    default: { const c = mix(sandColorAt(x, y), pick(PAL), 0.3); const [h, s, l] = rgb2hsl(c[0], c[1], c[2]); return hsl2rgb(h, clamp(s * 1.1, 0.35, 0.85), clamp(l, 0.66, 0.84)); }
+  }
+}
+const se = (v, n) => Math.sign(v) * Math.pow(Math.abs(v), 2 / n);
+// rest outline for each material (anchor frame: ground at y = 0, up is negative)
+function shapePts(kind, sh, r, tilt, X, Y) {
+  for (let i = 0; i < NB; i++) {
+    const a = i / NB * TAU + UP, c = Math.cos(a), s = Math.sin(a); let x, y;
+    switch (kind) {
+      case 'jelly': { let rho = 1, xx = c, yy = s; if (yy > 0) yy *= 0.82; if (sh === 'tall' && yy < 0) yy *= 1.28;
+        if (sh === 'cat') rho += bump(a, UP - 0.72, 0.2, 0.26) + bump(a, UP + 0.72, 0.2, 0.26);
+        else if (sh === 'horns') rho += bump(a, UP - 0.52, 0.13, 0.22) + bump(a, UP + 0.52, 0.13, 0.22);
+        else if (sh === 'spiky') rho += bump(a, UP, 0.14, 0.2) + bump(a, UP - 0.62, 0.14, 0.16) + bump(a, UP + 0.62, 0.14, 0.16);
+        x = xx * rho * r; y = -0.82 * r + yy * rho * r; break; }
+      case 'mound': x = c * 1.3 * r; y = (s < 0 ? -Math.pow(-s, 0.8) * 1.0 : s * 0.1) * r - 0.1 * r; break;
+      case 'ball': x = c * 0.95 * r; y = (s > 0 ? s * 0.85 : s * 0.95) * r - 0.85 * r; break;
+      case 'butter': x = se(c, 6) * 1.0 * r; y = se(s, 6) * 0.62 * r - 0.62 * r; break;
+      case 'slime': x = c * r * (1 + 0.22 * Math.max(0, s)); y = (s < 0 ? s * 0.95 : s * 0.55) * r - 0.55 * r; break;
+      case 'bubble': x = c * r; y = s * r - r; break;
+      case 'marsh': x = se(c, 3.2) * 0.85 * r; y = se(s, 3.2) * 0.98 * r - 0.98 * r; break;
+      case 'ice': { const x0 = se(c, 7) * 0.92 * r, y0 = se(s, 7) * 0.88 * r, ct = Math.cos(tilt), st = Math.sin(tilt); x = x0 * ct - y0 * st; y = x0 * st + y0 * ct - 0.88 * r; break; }
+      case 'mercury': x = c * 1.15 * r; y = (s < 0 ? s * 0.72 : s * 0.32) * r - 0.32 * r; break;
+    }
+    X[i] = x; Y[i] = y;
+  }
 }
 
 // ---------- soft-body sprites ----------
@@ -612,13 +751,15 @@ const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= TAU; while (
 const bump = (a, a0, w, h) => h * Math.exp(-((angDiff(a, a0) / w) ** 2));
 const ptrs = new Map();
 let night = 0, nightTarget = 0;
+const TV = [new Float32Array(NB), new Float32Array(NB)];
+const RX = new Float32Array(NB), RY = new Float32Array(NB);
 
 class Sprite {
   constructor(x, y, o = {}) {
     this.x = x; this.y = y; this.z = 0; this.vx = 0; this.vy = 0; this.vz = 0;
-    this.r = o.r || baseR * rand(0.88, 1.12);
     this.mat = o.mat || pick(AVAIL); this.M = MATS[this.mat];
-    this.shape = o.shape || pick(SHAPES);
+    this.r = o.r || baseR * rand(0.9, 1.1) * this.M.size;
+    this.shape = o.shape || pick(SHAPES); this.tilt = rand(-0.12, 0.12);
     this.col = o.col || matColor(this.mat, x, y);
     this.voice = rand(680, 1080); this.seed = rand(0, 10);
     this.state = o.state || 'emerge'; this.e = o.e || 0; this.st = 0; this.peekDur = 10;
@@ -629,45 +770,52 @@ class Sprite {
     this.spin = 0; this.spinV = 0; this.ptr = null; this.pressing = false; this.pressT = 0; this.kneadT = 0;
     this.taps = 0; this.tapT = -9; this.dead = false; this.ox = 0; this.oy = 0; this.bounces = 0;
     this.psx = 1; this.psy = 1; this.tsx = 1; this.tsy = 1; this.poseRate = 6;
+    this.form = 0; this.formT = 0;  // sand: 0 = heap, 1 = ball
     this.pile = false; this.pileT = 0; this.pileHold = 0.9; this.rebuilding = false; this.rbT = 0;
+    this.melt = 0; this.popped = false; this.popT = 0; this.mergeCD = 0; this.walkCD = 0;
     this.dents = []; this.dentU = new Float32Array(24);
     this.fruit = this.mat === 'jelly' ? [rand(0.18, 0.36) * (Math.random() < 0.5 ? -1 : 1), rand(0.46, 0.54), rand(0.19, 0.23), pick([0, 0, 1, 2])] : [0, 0, 0, 0];
     this.slot = slotFree.length ? slotFree.shift() : -1;
-    this.buildRest();
-    this.bodyH = (0 - Math.min(...this.restY)) * 1.02;
     this.px = new Float32Array(NB); this.py = new Float32Array(NB); this.vxs = new Float32Array(NB); this.vys = new Float32Array(NB);
     this.fx_ = new Float32Array(NB); this.fy_ = new Float32Array(NB); this.hx = new Float32Array(NB); this.hy = new Float32Array(NB);
+    this.buildRest();
     this.computeHomes(); for (let i = 0; i < NB; i++) { this.px[i] = this.hx[i]; this.py[i] = this.hy[i]; }
     this.resetInertia();
   }
   buildRest() {
-    const r = this.r, cyc = -r * 0.82, sh = this.shape;
-    this.restX = new Float32Array(NB); this.restY = new Float32Array(NB); this.dirX = new Float32Array(NB); this.dirY = new Float32Array(NB); this.faceX = new Float32Array(NB); this.faceY = new Float32Array(NB);
-    let cx = 0, cy = 0;
-    for (let i = 0; i < NB; i++) {
-      const a = i / NB * TAU + UP, ca = Math.cos(a), sa = Math.sin(a);
-      let rho = 1, x = ca, y = sa; if (y > 0) y *= 0.82; if (sh === 'tall' && y < 0) y *= 1.28;
-      if (sh === 'cat') rho += bump(a, UP - 0.72, 0.2, 0.26) + bump(a, UP + 0.72, 0.2, 0.26);
-      else if (sh === 'horns') rho += bump(a, UP - 0.52, 0.13, 0.22) + bump(a, UP + 0.52, 0.13, 0.22);
-      else if (sh === 'spiky') rho += bump(a, UP, 0.14, 0.2) + bump(a, UP - 0.62, 0.14, 0.16) + bump(a, UP + 0.62, 0.14, 0.16);
-      this.restX[i] = x * rho * r; this.restY[i] = cyc + y * rho * r; this.dirX[i] = ca; this.dirY[i] = sa;
-      this.faceX[i] = this.restX[i] / r; this.faceY[i] = (this.restY[i] - cyc) / r; cx += this.restX[i]; cy += this.restY[i];
-    }
-    this.restC = cyc; this.fc0x = cx / NB / r; this.fc0y = (cy / NB - cyc) / r;
+    const r = this.r, m = this.mat;
+    this.aX = new Float32Array(NB); this.aY = new Float32Array(NB); this.bX = new Float32Array(NB); this.bY = new Float32Array(NB);
+    this.dirX = new Float32Array(NB); this.dirY = new Float32Array(NB); this.faceX = new Float32Array(NB); this.faceY = new Float32Array(NB);
+    for (let i = 0; i < NB; i++) { const a = i / NB * TAU + UP; this.dirX[i] = Math.cos(a); this.dirY[i] = Math.sin(a); }
+    if (m === 'sand') { shapePts('mound', 0, r, 0, this.aX, this.aY); shapePts('ball', 0, r, 0, this.bX, this.bY); }
+    else { shapePts(m === 'jelly' ? 'jelly' : m, this.shape, r, this.tilt, this.aX, this.aY); this.bX.set(this.aX); this.bY.set(this.aY); }
+    this.bodyH = -Math.min(Math.min(...this.aY), Math.min(...this.bY)) * 1.02;
+  }
+  setRadius(nr) {
+    const k = nr / this.r; this.r = nr; this.buildRest();
+    for (let i = 0; i < NB; i++) { this.px[i] *= k; this.py[i] *= k; }
+  }
+  // blended rest shape -> RX/RY, plus its centre
+  rest() {
+    const f = this.form; let cx = 0, cy = 0;
+    for (let i = 0; i < NB; i++) { RX[i] = this.aX[i] + (this.bX[i] - this.aX[i]) * f; RY[i] = this.aY[i] + (this.bY[i] - this.aY[i]) * f; cx += RX[i]; cy += RY[i]; }
+    this.rcx = cx / NB; this.rcy = cy / NB;
   }
   computeHomes() {
-    const cs = Math.cos(this.spin), sn = Math.sin(this.spin), cyc = this.restC, br = 1 + 0.018 * Math.sin(T * 2.2 + this.phase);
-    for (let i = 0; i < NB; i++) { const dx = this.restX[i], dy = this.restY[i] - cyc;
-      this.hx[i] = (dx * cs - dy * sn) * this.psx; this.hy[i] = (cyc + dx * sn + dy * cs) * this.psy * br; }
+    this.rest();
+    const cs = Math.cos(this.spin), sn = Math.sin(this.spin), cx = this.rcx, cy = this.rcy, br = 1 + 0.018 * Math.sin(T * 2.2 + this.phase);
+    for (let i = 0; i < NB; i++) { const dx = RX[i] - cx, dy = RY[i] - cy;
+      this.hx[i] = (cx + dx * cs - dy * sn) * this.psx; this.hy[i] = (cy + dx * sn + dy * cs) * this.psy * br;
+      this.faceX[i] = dx / this.r; this.faceY[i] = dy / this.r; }
   }
   resetInertia() { this.lastX = this.x; this.lastY = this.y - this.z; this.lastVx = 0; this.lastVy = 0; }
   get ax() { return this.x; }
   get ay() { return this.y - this.z + (1 - this.e) * this.bodyH; }
   centroid() { let cx = 0, cy = 0; for (let i = 0; i < NB; i++) { cx += this.px[i]; cy += this.py[i]; } return [cx / NB, cy / NB]; }
   get cy() { const c = this.centroid(); return this.ay + c[1]; }
-  visible() { return this.state === 'idle' || this.state === 'held' || this.state === 'fly' || this.state === 'emerge'; }
+  visible() { return !this.popped && (this.state === 'idle' || this.state === 'held' || this.state === 'fly' || this.state === 'emerge' || this.state === 'walk'); }
   local(wx, wy) { return [wx - this.ax, wy - this.ay]; }
-  giggle(v = 0.8, n = 0, delay = 0) { if (thr('giggle', 140)) Snd.giggle(this.voice, v, n, delay); this.mood = 'giggle'; this.moodT = Math.max(this.moodT, 0.6 + n * 0.1); }
+  giggle(v = 0.8, n = 0, delay = 0) { Snd.giggle(this.voice, v, n, delay); this.mood = 'giggle'; this.moodT = Math.max(this.moodT, 0.6 + n * 0.1); }
   arms(t) { this.armT = 1; this.armHold = Math.max(this.armHold, t); }
   // --- soft body forces ---
   pokeLocal(lx, ly, k) {
@@ -677,32 +825,29 @@ class Sprite {
       this.vxs[i] += ux / ul * 320 * w * k * M.pokeK; this.vys[i] += uy / ul * 320 * w * k * M.pokeK + 40 * k * M.pokeK; }
   }
   impulse(vx, vy) { for (let i = 0; i < NB; i++) { this.vxs[i] += vx; this.vys[i] += vy; } }
-  faceUVOf(lx, ly) { const [cx, cy] = this.centroid(), cs = Math.cos(-this.spin), sn = Math.sin(-this.spin); let dx = (lx - cx) / this.psx, dy = (ly - cy) / this.psy;
-    return [(dx * cs - dy * sn) / this.r + this.fc0x, (dx * sn + dy * cs) / this.r + this.fc0y]; }
-  addDent(lx, ly, depth, hold = false) { const [u, v] = this.faceUVOf(lx, ly); const d = { u: clamp(u, -1.2, 1.2), v: clamp(v, -1.4, 0.9), depth, w: this.M.dentW, hold }; this.dents.push(d); if (this.dents.length > 6) this.dents.shift(); return d; }
+  faceUVOf(lx, ly) { const [cx, cy] = this.centroid(), cs = Math.cos(-this.spin), sn = Math.sin(-this.spin); const dx = (lx - cx) / this.psx, dy = (ly - cy) / this.psy;
+    return [(dx * cs - dy * sn) / this.r, (dx * sn + dy * cs) / this.r]; }
+  addDent(lx, ly, depth, hold = false) { if (this.M.noDent) return null; const [u, v] = this.faceUVOf(lx, ly); const d = { u: clamp(u, -1.3, 1.3), v: clamp(v, -1.3, 1.0), depth, w: this.M.dentW, hold }; this.dents.push(d); if (this.dents.length > 6) this.dents.shift(); return d; }
   softStep(dt) {
-    const M = this.M, n = NB, sub = 3, h = dt / sub;
+    const M = this.M, n = NB, sub = clamp(Math.ceil(dt / 0.006), 3, 8), h = dt / sub;
     this.computeHomes();
+    const soft = this.mat === 'butter' ? 1 - 0.6 * this.melt : 1, kh = M.home * soft, ke = M.edge * (this.mat === 'butter' ? 1 - 0.4 * this.melt : 1);
     const area = (X, Y) => { let a = 0; for (let i = 0; i < n; i++) { const j = (i + 1) % n; a += X[i] * Y[j] - X[j] * Y[i]; } return Math.abs(a) * 0.5; };
     const A0 = area(this.hx, this.hy), damp = Math.exp(-M.damp * h), grounded = this.z <= 0.5 && this.state !== 'held';
-    const TV = Sprite.tv || (Sprite.tv = [new Float32Array(NB), new Float32Array(NB)]);
     for (let s = 0; s < sub; s++) {
       const A = area(this.px, this.py), aF = M.area * (A0 - A) / Math.max(A0, 1) * this.r;
       let cx = 0, cy = 0; for (let i = 0; i < n; i++) { cx += this.px[i]; cy += this.py[i]; } cx /= n; cy /= n;
       for (let i = 0; i < n; i++) {
         const ip = (i + 1) % n, im = (i + n - 1) % n;
-        let ax = M.home * (this.hx[i] - this.px[i]), ay = M.home * (this.hy[i] - this.py[i]);
-        for (const j of [ip, im]) { const dx = this.px[j] - this.px[i], dy = this.py[j] - this.py[i], d = Math.hypot(dx, dy) || 1e-3,
-          L0 = Math.hypot(this.hx[j] - this.hx[i], this.hy[j] - this.hy[i]), f = M.edge * (d - L0) / d; ax += dx * f; ay += dy * f; }
-        // bending: keep the local curvature of the rest shape (smooths zig-zags)
+        let ax = kh * (this.hx[i] - this.px[i]), ay = kh * (this.hy[i] - this.py[i]);
+        for (let q = 0; q < 2; q++) { const j = q ? im : ip, dx = this.px[j] - this.px[i], dy = this.py[j] - this.py[i], d = Math.hypot(dx, dy) || 1e-3,
+          L0 = Math.hypot(this.hx[j] - this.hx[i], this.hy[j] - this.hy[i]), f = ke * (d - L0) / d; ax += dx * f; ay += dy * f; }
         ax += M.bend * ((this.px[im] + this.px[ip]) * 0.5 - this.px[i] - ((this.hx[im] + this.hx[ip]) * 0.5 - this.hx[i]));
         ay += M.bend * ((this.py[im] + this.py[ip]) * 0.5 - this.py[i] - ((this.hy[im] + this.hy[ip]) * 0.5 - this.hy[i]));
-        // volume: push radially from the centre
-        let rx = this.px[i] - cx, ry = this.py[i] - cy; const rl = Math.hypot(rx, ry) || 1; ax += aF * rx / rl; ay += aF * ry / rl;
+        const rx = this.px[i] - cx, ry = this.py[i] - cy, rl = Math.hypot(rx, ry) || 1; ax += aF * rx / rl; ay += aF * ry / rl;
         ax += this.fx_[i]; ay += this.fy_[i];
         this.vxs[i] = (this.vxs[i] + ax * h) * damp; this.vys[i] = (this.vys[i] + ay * h) * damp;
       }
-      // viscosity between neighbours: kills jitter, keeps the big wobble
       for (let i = 0; i < n; i++) { const ip = (i + 1) % n, im = (i + n - 1) % n;
         TV[0][i] = this.vxs[i] + ((this.vxs[im] + this.vxs[ip]) * 0.5 - this.vxs[i]) * M.visc; TV[1][i] = this.vys[i] + ((this.vys[im] + this.vys[ip]) * 0.5 - this.vys[i]) * M.visc; }
       this.vxs.set(TV[0]); this.vys.set(TV[1]);
@@ -716,44 +861,63 @@ class Sprite {
   tap(wx, wy) {
     const M = this.M, [lx, ly] = this.local(wx, wy);
     if (this.state === 'emerge') { this.e = 1; this.state = 'idle'; }
-    this.pokeLocal(lx, ly, 1); this.addDent(lx, ly, this.mat === 'jelly' ? 0.9 : 0.5); this.arms(0.7);
+    if (this.state === 'walk') this.endWalk(false);
+    this.pokeLocal(lx, ly, 1); this.addDent(lx, ly, this.mat === 'butter' ? 0.7 : this.mat === 'jelly' ? 0.9 : 0.5); this.arms(0.7);
     if (this.pile) { MSND.sand.tap(); grains(wx, wy, 14, this.col, 0.7); return; }
-    if (this.z <= 0 && this.state === 'idle') this.vz = rand(200, 280) * M.jump;
+    if (this.z <= 0 && this.state === 'idle' && !M.hover) this.vz = rand(200, 280) * M.jump;
+    if (M.hover) { this.vx += rand(-60, 60); this.vy += rand(-40, 40); }
     if (T - this.tapT < 1.1) this.taps++; else this.taps = 1; this.tapT = T;
     MSND[this.mat].tap(); this.mood = 'giggle'; this.moodT = 0.9; this.matFx(wx, wy, 1);
-    if (this.taps % 3 === 0) { this.spinV = 16 * (Math.random() < 0.5 ? -1 : 1); this.giggle(1, 6, 0.1); hearts(this.x, this.cy - this.r * 0.5, 4); this.vz = 380 * M.jump; }
-    else if (Math.random() < 0.5) this.giggle(0.7, 0, 0.14);
+    if (this.mat === 'mercury' && this.taps >= 3 && this.split()) { this.taps = 0; return; }
+    if (this.taps % 3 === 0) { this.spinV = 16 * (Math.random() < 0.5 ? -1 : 1); this.giggle(1, 6, 0.1); hearts(this.x, this.cy - this.r * 0.5, 4); if (!M.hover) this.vz = 380 * M.jump; }
+    else if (Math.random() < 0.35) this.giggle(0.7, 0, 0.18);
   }
   matFx(wx, wy, k) {
-    if (this.mat === 'sand') grains(wx, wy, (12 * k) | 0, this.col, 0.7);
-    else if (this.mat === 'jelly') { drops(wx, wy, (3 * k) | 0, this.col); sparks(wx, wy, (2 * k) | 0, 10); }
+    const c = this.col;
+    switch (this.mat) {
+      case 'sand': grains(wx, wy, (12 * k) | 0, c, 0.7); break;
+      case 'jelly': drops(wx, wy, (3 * k) | 0, c); sparks(wx, wy, (2 * k) | 0, 10); break;
+      case 'butter': sparks(wx, wy, (2 * k) | 0, 10, '#fff6c8'); break;
+      case 'slime': drops(wx, wy, (4 * k) | 0, c); break;
+      case 'bubble': bubblesP(wx, wy, (3 * k) | 0); break;
+      case 'marsh': fluff(wx, wy, (7 * k) | 0, 'rgba(255,255,255,0.9)'); break;
+      case 'ice': sparks(wx, wy, (5 * k) | 0, 14, '#e8fbff'); break;
+      case 'mercury': drops(wx, wy, (2 * k) | 0, [0.85, 0.88, 0.95]); sparks(wx, wy, (2 * k) | 0, 10); break;
+    }
   }
-  grab(p) { this.ptr = p; const [lx, ly] = this.local(p.x, p.y); this.pokeLocal(lx, ly, 0.35); if (this.state === 'fly') this.beginDrag(p); }
+  grab(p) {
+    this.ptr = p; if (this.state === 'walk') this.endWalk(false);
+    const [lx, ly] = this.local(p.x, p.y); this.pokeLocal(lx, ly, 0.35); if (this.state === 'fly') this.beginDrag(p);
+  }
   beginDrag(p) {
     if (this.pile) return;
     if (this.pressing) this.endPress(false);
     this.state = 'held'; this.e = 1; this.ptr = p; this.ox = this.x - p.x; this.oy = this.y - p.y;
     const [lx, ly] = this.local(p.x, p.y); this.grabLX = lx; this.grabLY = ly;
     this.mood = 'surprised'; this.moodT = 0.5; this.bounces = 0; this.arms(0.5); Snd.whoop(this.voice);
+    if (this.mat === 'slime') Snd.stretch(1);
   }
   beginPress() {
     this.pressing = true; this.pressT = 0; this.kneadT = 0.55;
     const [lx, ly] = this.local(this.ptr.x, this.ptr.y);
-    if (this.mat === 'sand') { this.collapse(); return; }
-    MSND[this.mat].press(); this.mood = 'squeeze'; this.moodT = 99; this.pressDent = this.addDent(lx, ly, 0.4, true); this.matFx(this.ptr.x, this.ptr.y, 0.5);
+    if (this.mat === 'bubble') { this.pop(); this.pressing = false; return; }
+    if (this.mat === 'mercury') { this.pressing = false; this.split(); return; }
+    MSND[this.mat].press(); this.mood = 'squeeze'; this.moodT = 99;
+    if (this.mat !== 'sand') this.pressDent = this.addDent(lx, ly, 0.4, true);
+    this.matFx(this.ptr.x, this.ptr.y, 0.5);
   }
   endPress(release = true) {
     this.pressing = false; if (this.pressDent) { this.pressDent.hold = false; this.pressDent = null; }
-    if (this.mat === 'sand') { this.pileT = 0; this.pileHold = 0.7; return; }
     if (!release) { this.mood = 'happy'; this.moodT = 0; return; }
-    this.impulse(0, -260 * this.M.pokeK); this.vz = rand(260, 340) * this.M.jump;
-    this.mood = 'giggle'; this.moodT = 1.1; this.arms(1.1); MSND[this.mat].release(); this.giggle(0.9, 0, 0.2);
+    this.impulse(0, -260 * this.M.pokeK); if (!this.M.hover) this.vz = rand(260, 340) * this.M.jump;
+    this.mood = 'giggle'; this.moodT = 1.1; this.arms(1.1); MSND[this.mat].release(); this.giggle(0.9, 0, 0.25);
     hearts(this.x, this.cy - this.r * 0.6, 3); this.matFx(this.x, this.cy, 1.5);
   }
+  // sand: hard landings splash it flat; it then gathers itself back up
   collapse(hold = 0.9) {
-    if (this.pile) return; this.pile = true; this.rebuilding = false; this.pileT = 0; this.pileHold = hold; this.tsx = 1.35; this.tsy = 0.42; this.poseRate = 12;
-    this.mood = 'dizzy'; this.moodT = 99; this.armT = 0; this.armHold = 0; MSND.sand.press();
-    for (let i = 0; i < 4; i++) grains(this.x + rand(-0.7, 0.7) * this.r, this.y - rand(0.2, 1.4) * this.r, 10, this.col, 0.8);
+    if (this.pile) return; this.pile = true; this.rebuilding = false; this.pileT = 0; this.pileHold = hold; this.tsx = 1.3; this.tsy = 0.45; this.poseRate = 12;
+    this.mood = 'dizzy'; this.moodT = 99; this.armT = 0; this.armHold = 0; Snd.pour(1);
+    for (let i = 0; i < 4; i++) grains(this.x + rand(-0.7, 0.7) * this.r, this.y - rand(0.2, 1.0) * this.r, 10, this.col, 0.8);
     const g = toGrid(this.x, this.y); stamp(g[0], g[1], 0, 0, this.r / cellPx() * 1.1, 0, 0, this.col, 0.25);
   }
   updatePile(dt) {
@@ -762,23 +926,75 @@ class Sprite {
     if (this.rebuilding) { this.rbT += dt; if (this.rbT < 0.6 && Math.random() < 0.7) magnet(this, 2);
       if (this.rbT > 1.0) { this.pile = false; this.rebuilding = false; this.mood = 'giggle'; this.moodT = 1.1; this.arms(1); this.vz = 230; this.giggle(0.9); sparks(this.x, this.cy, 8, this.r); } }
   }
-  throwFrom(p) {
-    const h = p.hist; let vx = 0, vy = 0;
-    if (h.length >= 2) { const a = h[0], b = h[h.length - 1], dtt = (b.t - a.t) / 1000; if (dtt > 0.005) { vx = (b.x - a.x) / dtt; vy = (b.y - a.y) / dtt; } }
-    const sp = Math.hypot(vx, vy), cap = 2400; if (sp > cap) { vx *= cap / sp; vy *= cap / sp; }
-    this.state = 'fly'; this.st = 0; this.ptr = null; this.bounces = 0;
-    if (sp > 350) { this.vx = vx * 0.85; this.vy = vy * 0.85; this.vz = 160 + Math.min(sp, 2400) * 0.18; Snd.wheee(this.voice); this.mood = 'giggle'; this.moodT = 1.2; this.spinV = (vx > 0 ? 1 : -1) * Math.min(12, sp / 200); this.arms(1); }
-    else { this.vx = vx * 0.3; this.vy = vy * 0.3; this.vz = 60; this.mood = 'happy'; }
+  // bubble: pops into little bubbles, then floats back together
+  pop() {
+    if (this.popped) return; this.popped = true; this.popT = 0; this.ptr = null; this.state = 'idle'; Snd.popB(1);
+    bubblesP(this.x, this.cy, 14); sparks(this.x, this.cy, 6, this.r * 0.6); ringP(this.x, this.cy, this.r * 1.4, 'rgba(200,235,255,0.9)');
   }
-  reveal() { this.state = 'emerge'; this.st = 0; Snd.bloop(); Snd.giggle(this.voice, 1, 4, 0.25); this.mood = 'giggle'; this.moodT = 1.3; this.arms(1.3); burstSand(this.x, this.y, this.r); sparks(this.x, this.y - this.r, 10, this.r); }
-  dive() { this.state = 'dive'; this.st = 0; Snd.bye(); this.mood = 'happy'; this.arms(0.6); addWhirl(this.x, this.y, this.r * 1.3, 0.2, 0.8, 0.004); }
+  updatePop(dt) {
+    if (!this.popped) return; this.popT += dt;
+    if (this.popT > 0.7 && this.popT - dt <= 0.7) for (let i = 0; i < 10; i++) { const a = rand(0, TAU), d = rand(1.2, 2.4) * this.r;
+      addP({ t: 'mb', x: this.x + Math.cos(a) * d, y: this.cy + Math.sin(a) * d * 0.7, sp: this, k: rand(2, 4), max: 1.2, s: rand(4, 9) }); }
+    if (this.popT > 1.5) { this.popped = false; this.psx = this.psy = 0.25; this.tsx = this.tsy = 1; this.poseRate = 4; this.resetInertia();
+      Snd.bubbles(4, 0.8, true); Snd.bloop(); this.giggle(0.8, 0, 0.3); this.arms(1); sparks(this.x, this.cy, 8, this.r); }
+  }
+  // mercury: splits into two droplets; touching droplets merge again
+  split() {
+    if (this.r < baseR * 0.5 || !slotFree.length || activeCount() >= MAXS + 2) { this.impulse(rand(-200, 200), 150); Snd.plink(0.8); return false; }
+    const nr = this.r * 0.72, off = this.r * 0.55;
+    const c = new Sprite(this.x + off, this.y, { mat: 'mercury', r: nr, col: this.col, state: 'idle', e: 1 }); c.walls(true);
+    c.vx = 170; c.vz = 160; c.mergeCD = 1.3; c.mood = 'surprised'; c.moodT = 0.6; sprites.push(c);
+    this.setRadius(nr); this.x -= off; this.vx = -170; this.vz = 160; this.mergeCD = 1.3; this.mood = 'surprised'; this.moodT = 0.6; this.walls(true); this.resetInertia();
+    Snd.plip(); drops(this.x + off, this.cy, 6, [0.85, 0.88, 0.95]); sparks(this.x + off, this.cy, 5, 10);
+    return true;
+  }
+  // butter: softens in the sun, firms up at night
+  updateMelt(dt) {
+    if (this.mat !== 'butter') return;
+    this.melt = clamp(this.melt + (night < 0.5 ? dt / 28 : -dt / 6), 0, 1);
+    if (!this.pile) { this.tsx = 1 + 0.16 * this.melt; this.tsy = 1 - 0.22 * this.melt; this.poseRate = 2; }
+  }
+  // path walking
+  startWalk(pts) {
+    this.state = 'walk'; this.walkPts = pts; this.walkI = 0; this.walkPh = 0; this.lastStep = 0; this.walkNote = 0; this.vx = this.vy = 0; this.vz = 0;
+    this.mood = 'happy'; this.arms(0.4); Snd.whoop(this.voice);
+  }
+  endWalk(happy) {
+    const tr = this.trail; if (tr) tr.done = true; this.trail = null; this.walkPts = null; this.state = 'idle'; this.walkCD = 3;
+    if (!happy) return;
+    this.vz = this.M.hover ? 0 : 380 * Math.max(0.8, this.M.jump); this.spinV = 14 * (Math.random() < 0.5 ? -1 : 1);
+    this.mood = 'giggle'; this.moodT = 1.6; this.arms(1.6); this.giggle(1, 6, 0.15);
+    hearts(this.x, this.cy - this.r * 0.6, 6); sparks(this.x, this.cy, 14, this.r * 1.2); Snd.chimes([1046.5, 1318.5, 1568, 2093], 0.07, 0.1);
+  }
+  updateWalk(dt) {
+    const M = this.M, pts = this.walkPts; if (!pts) { this.state = 'idle'; return; }
+    let remain = M.walk * dt;
+    while (remain > 0 && this.walkI < pts.length) { const t = pts[this.walkI], dx = t.x - this.x, dy = t.y - this.y, d = Math.hypot(dx, dy);
+      if (d <= remain) { this.x = t.x; this.y = t.y; remain -= d; this.walkI++; }
+      else { this.x += dx / d * remain; this.y += dy / d * remain; this.lx = dx / d; this.ly = dy / d * 0.5; remain = 0; } }
+    if (this.trail) this.trail.idx = this.walkI;
+    this.walls(true);
+    this.walkPh += dt * M.walk / 36;
+    if (M.hover) this.z += (24 + 6 * Math.sin(T * 1.7 + this.phase) - this.z) * Math.min(1, dt * 3);
+    else this.z = Math.abs(Math.sin(this.walkPh * Math.PI)) * M.bob;
+    this.armT = 0.35 + 0.25 * Math.sin(this.walkPh * Math.PI * 2); this.armHold = 0.1;
+    const stepN = Math.floor(this.walkPh);
+    if (stepN !== this.lastStep) { this.lastStep = stepN; Snd.step(this.walkNote++);
+      const g = toGrid(this.x, this.y);
+      if (M.bob > 4) { const side = stepN % 2 ? 1 : -1; const f = toGrid(this.x + side * this.r * 0.25, this.y); stamp(f[0], f[1], 0, 0, this.r / cellPx() * 0.16, 0.03, 0, null, 0); this.impulse(0, 60); }
+      else if (!M.hover) stamp(g[0], g[1], 0, 0, this.r / cellPx() * 0.35, 0.01, 0.3, this.mat === 'butter' || this.mat === 'sand' || this.mat === 'slime' ? this.col : null, 0.25); }
+    if (this.walkI >= pts.length) this.endWalk(true);
+  }
   walls(held) {
     const r = this.r, x0 = TX + r * 0.95, x1 = TX + TW - r * 0.95, y0 = TY + this.bodyH * 0.92, y1 = TY + TH - r * 0.3; let hit = 0;
     if (this.x < x0) { this.x = x0; if (this.vx < 0) { hit = -this.vx; this.vx = -this.vx * 0.7; } }
     if (this.x > x1) { this.x = x1; if (this.vx > 0) { hit = this.vx; this.vx = -this.vx * 0.7; } }
     if (this.y < y0) { this.y = y0; if (this.vy < 0) { hit = Math.max(hit, -this.vy); this.vy = -this.vy * 0.7; } }
     if (this.y > y1) { this.y = y1; if (this.vy > 0) { hit = Math.max(hit, this.vy); this.vy = -this.vy * 0.7; } }
-    if (!held && hit > 220) { if (thr('bonk', 90)) Snd.bonk(Math.min(1, hit / 900)); if (this.mat === 'jelly' && thr('jb', 120)) Snd.bloing(0.5, 300); this.mood = 'surprised'; this.moodT = 0.4; }
+    if (!held && hit > 220) {
+      if (this.mat === 'bubble' && hit > 750) { this.pop(); return; }
+      if (this.mat === 'mercury' && hit > 800 && this.mergeCD <= 0 && this.split()) return;
+      if (thr('bonk', 90)) { Snd.bonk(Math.min(1, hit / 900)); MSND[this.mat].land(Math.min(1, hit / 1200)); } this.mood = 'surprised'; this.moodT = 0.4; }
   }
   land() {
     const M = this.M, imp = -this.vz;
@@ -786,69 +1002,101 @@ class Sprite {
     const g = toGrid(this.x, this.y);
     if (imp > 380) { if (thr('land', 70)) { Snd.plop(Math.min(1, imp / 1400) * 0.6); MSND[this.mat].land(Math.min(1, imp / 1100)); }
       stamp(g[0], g[1], 0, 0, this.r / cellPx() * 0.7, Math.min(0.1, imp / 9000), 0, null, 0); grains(this.x, this.y, Math.min(20, (imp / 60) | 0), sandColorAt(this.x, this.y));
-      if (this.mat === 'sand' && imp > 700 && !this.pile) this.collapse(0.8);
-      if (this.mat === 'jelly') drops(this.x, this.y - this.r * 0.3, 4, this.col); }
+      if (this.mat === 'sand' && imp > 650 && !this.pile) this.collapse(0.8);
+      if (this.mat === 'mercury' && imp > 750 && this.mergeCD <= 0) this.split();
+      if (this.mat === 'jelly' || this.mat === 'slime') drops(this.x, this.y - this.r * 0.3, 4, this.col); }
     else if (imp > 150) { if (thr('pat', 60)) Snd.pat(0.6); stamp(g[0], g[1], 0, 0, this.r / cellPx() * 0.5, 0.02, 0, null, 0); }
   }
-  hopTo(tx, ty, vz) { const Tt = 2 * vz / GRAV; this.vz = vz; this.vx = (tx - this.x) / Tt; this.vy = (ty - this.y) / Tt; }
+  hopTo(tx, ty, vz) { if (this.M.hover) { this.vx = (tx - this.x) * 1.2; this.vy = (ty - this.y) * 1.2; return; } const Tt = 2 * vz / GRAV; this.vz = vz; this.vx = (tx - this.x) / Tt; this.vy = (ty - this.y) / Tt; }
   idleAct() {
     const M = this.M, r = Math.random(); this.hopT = rand(1.6, 4.5);
+    if (M.hover) { const a = rand(0, TAU); this.vx = Math.cos(a) * rand(30, 70); this.vy = Math.sin(a) * rand(20, 50); if (r < 0.2) this.giggle(0.4); return; }
+    if (this.mat === 'slime' || this.mat === 'mercury') { const a = rand(0, TAU), s = rand(60, 130); this.vx = Math.cos(a) * s; this.vy = Math.sin(a) * s * 0.7; this.impulse(-this.vx * 0.4, 40); return; }
     if (r < 0.55) { const a = rand(0, TAU), d = rand(50, 170); this.hopTo(clamp(this.x + Math.cos(a) * d, TX + this.r, TX + TW - this.r), clamp(this.y + Math.sin(a) * d * 0.8, TY + this.bodyH, TY + TH - this.r * 0.4), rand(180, 260) * M.jump); }
     else if (r < 0.75) { this.vz = rand(240, 340) * M.jump; this.arms(0.6); if (Math.random() < 0.3) this.giggle(0.45); }
     else if (r < 0.88) { this.impulse(rand(-120, 120), -80); }
     else { this.spinV = 10 * (Math.random() < 0.5 ? -1 : 1); if (Math.random() < 0.5) this.giggle(0.4); }
   }
   physics(dt) {
-    const air = this.z > 0 || this.vz > 0;
-    if (air) { this.vz -= GRAV * dt; this.z += this.vz * dt; this.x += this.vx * dt; this.y += this.vy * dt; if (this.z <= 0) { this.z = 0; this.land(); } }
-    else { const sp = Math.hypot(this.vx, this.vy);
-      if (sp > 1) { const ox = this.x, oy = this.y; this.x += this.vx * dt; this.y += this.vy * dt; const f = Math.exp(-dt * (this.state === 'fly' ? 4 : 8)); this.vx *= f; this.vy *= f;
-        if (sp > 60) { const a = toGrid(ox, oy), b = toGrid(this.x, this.y); plow(a[0], a[1], b[0], b[1], this.r / cellPx() * 0.45, 0.012, 0.6, this.mat === 'sand' ? this.col : null, 0.2); } }
-      else this.vx = this.vy = 0;
-      if (this.state === 'fly' && sp < 25) { this.state = 'idle'; this.st = 0; this.hopT = rand(1, 2.5); } }
+    const M = this.M;
+    if (M.hover) {
+      this.z += (24 + 6 * Math.sin(T * 1.7 + this.phase) - this.z) * Math.min(1, dt * 3); this.vz = 0;
+      this.x += this.vx * dt; this.y += this.vy * dt; const f = Math.exp(-dt * M.friction); this.vx *= f; this.vy *= f;
+      if (this.state === 'fly' && Math.hypot(this.vx, this.vy) < 25) { this.state = 'idle'; this.hopT = rand(1, 2.5); }
+    } else {
+      const air = this.z > 0 || this.vz > 0;
+      if (air) { this.vz -= GRAV * dt; this.z += this.vz * dt; this.x += this.vx * dt; this.y += this.vy * dt; if (this.z <= 0) { this.z = 0; this.land(); } }
+      else { const sp = Math.hypot(this.vx, this.vy);
+        if (sp > 1) { const ox = this.x, oy = this.y; this.x += this.vx * dt; this.y += this.vy * dt; const f = Math.exp(-dt * (this.state === 'fly' ? Math.min(4, M.friction) : M.friction)); this.vx *= f; this.vy *= f;
+          if (sp > 40) { const a = toGrid(ox, oy), b = toGrid(this.x, this.y); const pc = this.mat === 'sand' || this.mat === 'butter' || this.mat === 'slime' ? this.col : null;
+            plow(a[0], a[1], b[0], b[1], this.r / cellPx() * 0.45, 0.012, 0.6, pc, this.mat === 'butter' ? 0.15 + 0.25 * this.melt : 0.2);
+            if (this.mat === 'ice' && Math.random() < sp / 800) sparks(this.x, this.y, 1, this.r * 0.5, '#e8fbff'); } }
+        else this.vx = this.vy = 0;
+        if (this.state === 'fly' && sp < 25) { this.state = 'idle'; this.st = 0; this.hopT = rand(1, 2.5); } }
+    }
     this.walls(false);
-    if (this.state === 'idle' && !this.ptr && !air && !this.pressing && !this.pile) { this.hopT -= dt; if (this.hopT <= 0) this.idleAct(); if (this.age > this.life && activeCount() > 3) this.dive(); }
+    const air2 = !M.hover && (this.z > 0 || this.vz > 0);
+    if (this.state === 'idle' && !this.ptr && !air2 && !this.pressing && !this.pile) { this.hopT -= dt; if (this.hopT <= 0) this.idleAct(); if (this.age > this.life && activeCount() > 3) this.dive(); }
   }
+  throwFrom(p) {
+    const h = p.hist; let vx = 0, vy = 0;
+    if (h.length >= 2) { const a = h[0], b = h[h.length - 1], dtt = (b.t - a.t) / 1000; if (dtt > 0.005) { vx = (b.x - a.x) / dtt; vy = (b.y - a.y) / dtt; } }
+    const sp = Math.hypot(vx, vy), cap = 2400; if (sp > cap) { vx *= cap / sp; vy *= cap / sp; }
+    this.state = 'fly'; this.st = 0; this.ptr = null; this.bounces = 0;
+    if (sp > 350) { this.vx = vx * 0.85; this.vy = vy * 0.85; this.vz = this.M.hover ? 0 : 160 + Math.min(sp, 2400) * 0.18; Snd.wheee(this.voice); this.mood = 'giggle'; this.moodT = 1.2; this.spinV = (vx > 0 ? 1 : -1) * Math.min(12, sp / 200); this.arms(1); }
+    else { this.vx = vx * 0.3; this.vy = vy * 0.3; this.vz = this.M.hover ? 0 : 60; this.mood = 'happy'; }
+    if (this.mat === 'slime') Snd.splort(0.5);
+  }
+  reveal() { this.state = 'emerge'; this.st = 0; Snd.bloop(); Snd.giggle(this.voice, 1, 4, 0.25); this.mood = 'giggle'; this.moodT = 1.3; this.arms(1.3); burstSand(this.x, this.y, this.r); sparks(this.x, this.y - this.r, 10, this.r); }
+  dive() { if (this.state === 'walk') this.endWalk(false); this.state = 'dive'; this.st = 0; Snd.bye(); this.mood = 'happy'; this.arms(0.6); addWhirl(this.x, this.y, this.r * 1.3, 0.2, 0.8, 0.004); }
   update(dt) {
-    const M = this.M; this.age += dt; this.st += dt;
+    const M = this.M; this.age += dt; this.st += dt; this.mergeCD -= dt; this.walkCD -= dt;
     this.blinkT -= dt; if (this.blinkT < 0) { this.blinking = 0.13; this.blinkT = rand(2, 5.5); } if (this.blinking > 0) this.blinking -= dt;
     if (this.moodT > 0) { this.moodT -= dt; if (this.moodT <= 0) this.mood = 'happy'; }
     if (this.armHold > 0) this.armHold -= dt; else this.armT = 0;
     this.arm += (this.armT - this.arm) * Math.min(1, dt * 10);
     this.spin += this.spinV * dt; this.spinV *= Math.exp(-dt * 2.5);
     if (Math.abs(this.spinV) < 0.6) { let s = this.spin % TAU; if (s > Math.PI) s -= TAU; if (s < -Math.PI) s += TAU; this.spin = s * Math.exp(-dt * 8); this.spinV = 0; }
-    let tx = null, ty = 0, bd = 480;
-    for (const p of ptrs.values()) { const d = Math.hypot(p.x - this.x, p.y - this.y); if (d < bd) { bd = d; tx = p.x; ty = p.y; } }
-    if (tx === null) { this.glanceT -= dt; if (this.glanceT < 0) { this.glanceT = rand(1.5, 4); const an = rand(0, TAU); this.gx = Math.cos(an); this.gy = Math.sin(an) * 0.6; if (Math.random() < 0.3) { this.gx = 0; this.gy = 0.25; } } this.lx = this.gx; this.ly = this.gy; }
-    else { const dx = tx - this.x, dy = ty - (this.y - this.r), d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 120); this.lx = dx / d * k; this.ly = dy / d * k; }
-    this.lookX += (this.lx - this.lookX) * Math.min(1, dt * 10); this.lookY += (this.ly - this.lookY) * Math.min(1, dt * 10);
-    // pressing / squeezing
-    if (this.pressing && this.ptr && !this.pile) {
-      this.pressT += dt; const pr = Math.min(1, this.pressT / 0.35), [lx] = this.local(this.ptr.x, this.ptr.y), R = this.r * 0.8;
-      for (let i = 0; i < NB; i++) { const w = Math.exp(-(((this.hx[i] - lx) / R) ** 2)) * clamp(-this.hy[i] / (1.7 * this.r), 0.15, 1); this.fy_[i] += M.pressK * pr * w; }
-      if (this.pressDent) this.pressDent.depth = 0.4 + pr * 0.8;
-      this.kneadT -= dt; if (this.kneadT <= 0) { this.kneadT = rand(0.5, 0.75); MSND[this.mat].knead(); this.impulse(rand(-60, 60), 90); this.matFx(this.ptr.x, this.ptr.y, 0.4); }
+    if (this.state !== 'walk') {
+      let tx = null, ty = 0, bd = 480;
+      for (const p of ptrs.values()) { const d = Math.hypot(p.x - this.x, p.y - this.y); if (d < bd) { bd = d; tx = p.x; ty = p.y; } }
+      if (tx === null) { this.glanceT -= dt; if (this.glanceT < 0) { this.glanceT = rand(1.5, 4); const an = rand(0, TAU); this.gx = Math.cos(an); this.gy = Math.sin(an) * 0.6; if (Math.random() < 0.3) { this.gx = 0; this.gy = 0.25; } } this.lx = this.gx; this.ly = this.gy; }
+      else { const dx = tx - this.x, dy = ty - (this.y - this.r), d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 120); this.lx = dx / d * k; this.ly = dy / d * k; }
     }
-    for (let i = this.dents.length - 1; i >= 0; i--) { const d = this.dents[i]; if (!d.hold) { d.depth *= Math.exp(-dt * M.dentDecay); if (d.depth < 0.02) this.dents.splice(i, 1); } }
-    this.updatePile(dt);
+    this.lookX += (this.lx - this.lookX) * Math.min(1, dt * 10); this.lookY += (this.ly - this.lookY) * Math.min(1, dt * 10);
+    // squeezing
+    if (this.pressing && this.ptr && !this.pile) {
+      this.pressT += dt; const pr = Math.min(1, this.pressT / (this.mat === 'marsh' ? 0.9 : 0.35)), [lx] = this.local(this.ptr.x, this.ptr.y), R = this.r * 0.8;
+      if (this.mat !== 'sand') for (let i = 0; i < NB; i++) { const w = Math.exp(-(((this.hx[i] - lx) / R) ** 2)) * clamp(-this.hy[i] / (1.7 * this.r), 0.15, 1); this.fy_[i] += M.pressK * pr * w; }
+      if (this.pressDent) this.pressDent.depth = 0.4 + pr * (this.mat === 'butter' ? 1.0 : 0.8);
+      this.kneadT -= dt; if (this.kneadT <= 0) { this.kneadT = rand(0.5, 0.75); MSND[this.mat].knead(); this.impulse(rand(-60, 60), this.mat === 'sand' ? -40 : 90); this.matFx(this.ptr.x, this.ptr.y, 0.4); }
+    }
+    for (let i = this.dents.length - 1; i >= 0; i--) { const d = this.dents[i]; if (!d.hold) { d.depth *= Math.exp(-dt * M.dentDecay * (this.mat === 'butter' ? 1 - 0.7 * this.melt : 1)); if (d.depth < 0.02) this.dents.splice(i, 1); } }
+    // sand: heap at rest, ball when picked up or squeezed
+    if (this.mat === 'sand') { const want = (this.state === 'held' || this.pressing) && !this.pile ? 1 : 0;
+      const prev = this.form; this.form += (want - this.form) * Math.min(1, dt * (want ? 7 : 2.2));
+      if (prev > 0.6 && this.form <= 0.6 && thr('slump', 300)) { Snd.pour(0.35); grains(this.x, this.y - this.r * 0.4, 8, this.col, 0.4); } }
+    this.updatePile(dt); this.updatePop(dt); this.updateMelt(dt);
     this.psx += (this.tsx - this.psx) * Math.min(1, dt * this.poseRate); this.psy += (this.tsy - this.psy) * Math.min(1, dt * this.poseRate);
+    if (this.popped) { this.resetInertia(); return; }
     switch (this.state) {
-      case 'emerge': this.e = Math.min(1, this.e + dt / 0.5); if (this.e >= 1) { this.state = 'idle'; this.st = 0; this.arms(0.8); this.vz = 220 * M.jump; } break;
+      case 'emerge': this.e = Math.min(1, this.e + dt / 0.5); if (this.e >= 1) { this.state = 'idle'; this.st = 0; this.arms(0.8); if (!M.hover) this.vz = 220 * M.jump; } break;
       case 'peek': { const tg = 0.64 + 0.05 * Math.sin(this.st * 2.6); this.e += (tg - this.e) * Math.min(1, dt * 3); if (this.st > this.peekDur) { this.state = 'sink'; this.st = 0; } break; }
       case 'sink': this.e -= dt / 0.45; if (this.e <= 0) this.dead = true; break;
       case 'dive': this.e -= dt / 0.7; this.spin += dt * 9; if (this.e <= 0) this.dead = true; break;
+      case 'walk': this.updateWalk(dt); break;
       case 'held': {
         const p = this.ptr; if (!p) { this.state = 'fly'; break; }
         const k = 1 - Math.exp(-dt * M.follow), ox = this.x, oy = this.y;
         this.x += (p.x + this.ox - this.x) * k; this.y += (p.y + this.oy - this.y) * k; this.vx = (this.x - ox) / dt; this.vy = (this.y - oy) / dt;
-        this.z += (14 - this.z) * Math.min(1, dt * 12); this.vz = 0; this.walls(true);
-        const [lx, ly] = this.local(p.x, p.y), R2 = (this.r * 0.65) ** 2;
-        for (let i = 0; i < NB; i++) { const dx = this.hx[i] - this.grabLX, dy = this.hy[i] - this.grabLY, w = Math.exp(-(dx * dx + dy * dy) / R2);
-          this.fx_[i] += M.grabK * w * (lx - this.px[i]); this.fy_[i] += M.grabK * w * (ly - this.py[i]); }
+        this.z += ((M.hover ? 30 : 14) - this.z) * Math.min(1, dt * 12); this.vz = 0; this.walls(true);
+        if (M.grabK > 0) { const [lx, ly] = this.local(p.x, p.y), R2 = (this.r * 0.65) ** 2;
+          for (let i = 0; i < NB; i++) { const dx = this.hx[i] - this.grabLX, dy = this.hy[i] - this.grabLY, w = Math.exp(-(dx * dx + dy * dy) / R2);
+            this.fx_[i] += M.grabK * w * (lx - this.px[i]); this.fy_[i] += M.grabK * w * (ly - this.py[i]); } }
         const sp = Math.hypot(this.vx, this.vy);
         if (sp > 900 && this.mood !== 'giggle') { this.mood = 'giggle'; this.moodT = 0.6; if (Math.random() < 0.3) this.giggle(0.6); }
         this.arms(0.2);
-        if (sp > 20) { const a2 = toGrid(ox, oy), b2 = toGrid(this.x, this.y); plow(a2[0], a2[1], b2[0], b2[1], this.r / cellPx() * 0.42, 0.008, 0.4, this.col, this.mat === 'sand' ? 0.4 : 0.22);
+        if (sp > 20 && !M.hover) { const a2 = toGrid(ox, oy), b2 = toGrid(this.x, this.y); plow(a2[0], a2[1], b2[0], b2[1], this.r / cellPx() * 0.42, 0.008, 0.4, this.col, this.mat === 'sand' ? 0.4 : 0.22);
           if (this.mat === 'sand' && Math.random() < sp / 1500) grains(this.x, this.y - this.r * 0.3, 2, this.col, 0.5); }
         break;
       }
@@ -867,21 +1115,23 @@ class Sprite {
     const du = this.dentU; du.fill(0); this.dents.forEach((d, k) => { du[k * 4] = d.u; du[k * 4 + 1] = d.v; du[k * 4 + 2] = d.depth; du[k * 4 + 3] = d.w; });
     gl.uniform4fv(USP.uDents, du);
     const sx = (this.slot % SLOTS_X) * SLOT / ATLAS, sy = ((this.slot / SLOTS_X) | 0) * SLOT / ATLAS; gl.uniform4f(USP.uSlot, sx, sy, SLOT / ATLAS, SLOT / ATLAS);
-    gl.uniform4f(USP.uP, this.fruit[0], this.fruit[1], this.fruit[2], this.fruit[3]);
+    if (this.mat === 'butter') gl.uniform4f(USP.uP, this.melt, 0, 0, 0); else gl.uniform4f(USP.uP, this.fruit[0], this.fruit[1], this.fruit[2], this.fruit[3]);
     if (this.e < 0.999) gl.uniform4f(USP.uClip, this.x, this.y, this.r * 1.1 * (0.55 + 0.45 * Math.min(1, this.e * 2)), 1); else gl.uniform4f(USP.uClip, 0, 0, 1, 0);
   }
   bodyMesh(b) {
     const ax = this.ax, ay = this.ay, [cx, cy] = this.centroid(), cs = Math.cos(this.spin), sn = Math.sin(this.spin);
-    let o = 0; b[o++] = ax + cx; b[o++] = ay + cy; b[o++] = 0; b[o++] = 0; b[o++] = this.fc0x; b[o++] = this.fc0y;
+    let o = 0; b[o++] = ax + cx; b[o++] = ay + cy; b[o++] = 0; b[o++] = 0; b[o++] = 0; b[o++] = 0;
     for (let k = 0; k < NR; k++) { const rho = RINGS[k];
       for (let i = 0; i < NB; i++) { b[o++] = ax + cx + (this.px[i] - cx) * rho; b[o++] = ay + cy + (this.py[i] - cy) * rho;
         const dx = this.dirX[i], dy = this.dirY[i]; b[o++] = (dx * cs - dy * sn) * rho; b[o++] = (dx * sn + dy * cs) * rho;
-        b[o++] = this.fc0x + (this.faceX[i] - this.fc0x) * rho; b[o++] = this.fc0y + (this.faceY[i] - this.fc0y) * rho; } }
+        b[o++] = this.faceX[i] * rho; b[o++] = this.faceY[i] * rho; } }
   }
   armMesh(b, side) {
-    const pileK = clamp((1 - this.psy) / 0.6, 0, 1); if (pileK > 0.9) return false;
+    if (!this.M.arms) return false;
+    let k = clamp((1 - this.psy) / 0.5, 0, 1); if (this.mat === 'sand') k = Math.max(k, (1 - this.form) * 0.35);
+    if (k > 0.9) return false;
     const idx = side > 0 ? 9 : 23, sx = this.ax + this.px[idx], sy = this.ay + this.py[idx];
-    const ang = 0.55 + (-1.15 - 0.55) * this.arm + Math.sin(T * 14 + side) * 0.25 * this.arm, ra = this.r * 0.2 * (1 - pileK);
+    const ang = 0.55 + (-1.15 - 0.55) * this.arm + Math.sin(T * 14 + side) * 0.25 * this.arm, ra = this.r * (this.mat === 'butter' || this.mat === 'ice' ? 0.17 : 0.2) * (1 - k);
     const dx = Math.cos(ang) * side, dy = Math.sin(ang), cx = sx + dx * ra * 0.9, cy = sy + dy * ra * 0.9;
     let o = 0; b[o++] = cx; b[o++] = cy; b[o++] = 0; b[o++] = 0; b[o++] = 9; b[o++] = 9;
     for (let i = 0; i < NB; i++) { const a = i / NB * TAU, ca = Math.cos(a), sa = Math.sin(a), ex = ca * ra * 1.25, ey = sa * ra * 0.85;
@@ -889,15 +1139,21 @@ class Sprite {
     return true;
   }
   shadowQuads(q) {
-    const r = this.r;
+    if (this.popped) return; const r = this.r;
     if (this.e < 0.999) { q(this.x, this.y, r * 1.1 * (0.55 + 0.45 * Math.min(1, this.e * 2)), r * 0.22, [0.24, 0.1, 0.2], 0.5); return; }
-    const k = 1 / (1 + this.z / 120), w = r * 1.0 * k * this.psx;
-    if (this.mat === 'jelly') { q(this.x + this.z * 0.15 + r * 0.1, this.y + this.z * 0.1 + r * 0.04, w * 1.05, r * 0.3 * k, mix(this.col, [0.25, 0.1, 0.2], 0.45), 0.42);
-      q(this.x + this.z * 0.15 + r * 0.22, this.y + this.z * 0.1 + r * 0.05, w * 0.45, r * 0.12 * k, mix(this.col, [1, 1, 1], 0.6), 0.5 * k); }
-    else q(this.x + this.z * 0.15, this.y + this.z * 0.1, w, r * 0.28 * k, [0.27, 0.12, 0.24], 0.4);
+    const k = 1 / (1 + this.z / 120), [cx] = this.centroid(), x = this.x + cx * 0.3 + this.z * 0.15, y = this.y + this.z * 0.1;
+    const w = Math.max(0.6, (Math.max(...this.px) - Math.min(...this.px)) / (2 * r)) * r * k;
+    switch (this.mat) {
+      case 'jelly': case 'slime': q(x + r * 0.1, y + r * 0.04, w * 1.05, r * 0.3 * k, mix(this.col, [0.25, 0.1, 0.2], 0.45), 0.42); q(x + r * 0.22, y + r * 0.05, w * 0.45, r * 0.12 * k, mix(this.col, [1, 1, 1], 0.6), 0.5 * k); break;
+      case 'ice': q(x + r * 0.1, y + r * 0.04, w * 1.0, r * 0.28 * k, [0.3, 0.45, 0.6], 0.3); q(x + r * 0.2, y + r * 0.05, w * 0.5, r * 0.12 * k, [1, 1, 1], 0.55 * k); break;
+      case 'bubble': q(x, y, w * 0.9, r * 0.22 * k, [0.4, 0.5, 0.7], 0.16); q(x + r * 0.15, y, w * 0.35, r * 0.08 * k, [1, 1, 1], 0.4 * k); break;
+      case 'mercury': q(x, y, w * 1.0, r * 0.26 * k, [0.15, 0.12, 0.2], 0.55); break;
+      default: q(x, y, w * 1.0, r * 0.28 * k, [0.27, 0.12, 0.24], 0.4);
+    }
   }
   drawLip(c) {
-    if (this.e >= 0.999 || this.e <= 0.02) return; const r = this.r, bx = this.x, by = this.y, lw = r * 1.1 * (0.55 + 0.45 * Math.min(1, this.e * 2)), w = lw * 1.08, sc0 = sandColorAt(bx, by + r * 0.25), sc = mix(sc0, [sc0[0] * 0.32, sc0[1] * 0.34, sc0[2] * 0.55], night * 0.9);
+    if (this.e >= 0.999 || this.e <= 0.02 || this.popped) return; const r = this.r, bx = this.x, by = this.y, lw = r * 1.1 * (0.55 + 0.45 * Math.min(1, this.e * 2)), w = lw * 1.08;
+    const sc0 = sandColorAt(bx, by + r * 0.25), sc = mix(sc0, [sc0[0] * 0.32, sc0[1] * 0.34, sc0[2] * 0.55], night * 0.9);
     const lg = c.createLinearGradient(0, by, 0, by + r * 0.3); lg.addColorStop(0, css(mix(sc, [1, 1, 1], 0.25))); lg.addColorStop(1, css(mix(sc, [0.3, 0.15, 0.2], 0.12)));
     c.fillStyle = lg; c.beginPath(); c.ellipse(bx, by, w, r * 0.3, 0, 0, Math.PI, false); c.ellipse(bx, by, lw * 0.96, r * 0.17, 0, Math.PI, 0, true); c.closePath(); c.fill();
   }
@@ -942,7 +1198,7 @@ function spawnAt(x, y, mat) {
 function spawnPeek() { if (!slotFree.length) return; const pos = randSpot(); const s = new Sprite(pos.x, pos.y, { state: 'peek' }); s.peekDur = rand(8, 13); s.walls(true); sprites.push(s); Snd.peep(); sparks(s.x, s.y - s.r * 0.5, 4, s.r * 0.6); }
 function hitSprite(x, y) {
   let best = null, bd = 1e9;
-  for (const s of sprites) { if (s.dead || s.state === 'sink' || s.state === 'dive') continue;
+  for (const s of sprites) { if (s.dead || s.popped || s.state === 'sink' || s.state === 'dive') continue;
     let cy = s.cy, rr = s.r * 1.25; if (s.state === 'peek') { cy = s.y - s.r * 0.55; rr = s.r * 1.35; } if (s.pile) { cy = s.y - s.r * 0.3; rr = s.r * 1.4; }
     const d = Math.hypot(x - s.x, (y - cy) * 0.95); if (d < rr && d < bd) { bd = d; best = s; } }
   return best;
@@ -961,8 +1217,8 @@ function updateWave(dt) {
     for (let y = 0; y < GH; y++) { const i = y * GW + x, v = (y + 0.5) / GH, c = freshColor(u, v, wave.seed);
       rA[i] += (c[0] - rA[i]) * k; gA[i] += (c[1] - gA[i]) * k; bA[i] += (c[2] - bA[i]) * k; hA[i] += (baseH(u, v, wave.seed) + crest - hA[i]) * k; dA[i] *= 1 - k * 0.5; } }
   const fxp = TX + f * TW; if (f > 0 && f < 1) for (let i = 0; i < 3; i++) sparks(fxp, TY + rand(0, TH), 1, 6);
-  for (const s of sprites) if (!wave.hit.has(s) && s.x < fxp && (s.state === 'idle' || s.state === 'fly') && !s.ptr && !s.pile) {
-    wave.hit.add(s); s.vz = rand(300, 400); s.vx += 140; s.state = 'fly'; s.mood = 'giggle'; s.moodT = 1; s.arms(1); if (thr('wg', 180)) s.giggle(0.7); }
+  for (const s of sprites) if (!wave.hit.has(s) && s.x < fxp && (s.state === 'idle' || s.state === 'fly') && !s.ptr && !s.pile && !s.popped) {
+    wave.hit.add(s); if (!s.M.hover) s.vz = rand(300, 400); s.vx += 140; s.state = 'fly'; s.mood = 'giggle'; s.moodT = 1; s.arms(1); if (thr('wg', 180)) s.giggle(0.7); }
   if (wave.t >= wave.dur) { seed = wave.seed; wave = null; }
 }
 
@@ -976,7 +1232,7 @@ function onDown(e) {
   e.preventDefault(); Snd.unlock(); if (!started) return; closePicker();
   try { fx.setPointerCapture(e.pointerId); } catch (_) {}
   const x = e.clientX, y = e.clientY, t = performance.now();
-  const p = { id: e.pointerId, x, y, x0: x, y0: y, lx: x, ly: y, t0: t, hist: [{ x, y, t }], mode: 'sand', s: null, moved: false, still: 0, whirlDone: false, dist: 0, speed: 0, wx: x, wy: y, wstr: 0 };
+  const p = { id: e.pointerId, x, y, x0: x, y0: y, lx: x, ly: y, t0: t, hist: [{ x, y, t }], mode: 'sand', s: null, moved: false, still: 0, whirlDone: false, dist: 0, speed: 0, wx: x, wy: y, wstr: 0, path: [{ x, y }], plen: 0 };
   const s = hitSprite(x, y);
   if (s) { if (s.state === 'peek') { s.reveal(); p.mode = 'none'; } else if (s.ptr) p.mode = 'none'; else { p.mode = 'sprite'; p.s = s; s.grab(p); } }
   ptrs.set(e.pointerId, p);
@@ -988,14 +1244,59 @@ function onMove(e) {
   if (!p.moved && Math.hypot(x - p.x0, y - p.y0) > 12) p.moved = true;
   if (p.mode === 'sand') { const d = Math.hypot(x - p.lx, y - p.ly);
     if (d > 0.5) { const a = toGrid(p.lx, p.ly), b = toGrid(x, y); plow(a[0], a[1], b[0], b[1], brushR(), 0.05, 0.9, paintColor(), 0.4); p.dist += d; p.lx = x; p.ly = y; if (Math.random() < d / 60) grains(x, y, 1, sandColorAt(x, y), 0.4); }
-    if (Math.hypot(x - p.wx, y - p.wy) > 16) { p.wx = x; p.wy = y; p.still = 0; p.whirlDone = false; p.wstr = 0; } }
+    if (Math.hypot(x - p.wx, y - p.wy) > 16) { p.wx = x; p.wy = y; p.still = 0; p.whirlDone = false; p.wstr = 0; }
+    const lp = p.path[p.path.length - 1], pd = Math.hypot(x - lp.x, y - lp.y); if (pd > 10 && p.path.length < 500) { p.path.push({ x, y }); p.plen += pd; } }
 }
 function onUp(e, cancel) {
   const p = ptrs.get(e.pointerId); if (!p) return; ptrs.delete(e.pointerId);
   const dur = performance.now() - p.t0;
-  if (p.mode === 'sprite' && p.s && !p.s.dead) { const s = p.s;
-    if (s.state === 'held') s.throwFrom(p); else if (s.pressing) s.endPress(true); else if (!p.moved && !cancel) s.tap(p.x, p.y); s.ptr = null; }
+  if (p.mode === 'sprite' && p.s && !p.s.dead && !p.s.popped) { const s = p.s;
+    if (s.state === 'held') s.throwFrom(p); else if (s.pressing) s.endPress(true); else if (!p.moved && !cancel && !p.pressed) s.tap(p.x, p.y); s.ptr = null; }
   else if (p.mode === 'sand' && !p.moved && dur < 350 && !cancel) sandTap(p.x, p.y);
+  else if (p.mode === 'sand' && p.moved && p.plen > 150 && !cancel) assignPath(p.path);
+}
+const trails = [];
+function assignPath(pts) {
+  let best = null, bd = 330, rev = false; const a = pts[0], z = pts[pts.length - 1];
+  for (const s of sprites) { if (s.state !== 'idle' || s.ptr || s.pressing || s.pile || s.popped || s.walkCD > 0 || (!s.M.hover && s.z > 30)) continue;
+    const d0 = Math.hypot(s.x - a.x, s.y - a.y), d1 = Math.hypot(s.x - z.x, s.y - z.y); if (d0 < bd) { bd = d0; best = s; rev = false; } if (d1 < bd) { bd = d1; best = s; rev = true; } }
+  if (!best) return;
+  const path = rev ? pts.slice().reverse() : pts.slice(), tr = { pts: path, idx: 0, done: false, fade: 1 };
+  trails.push(tr); best.trail = tr; best.startWalk(path);
+}
+function drawTrails(c, dt) {
+  c.save(); c.globalCompositeOperation = 'lighter';
+  for (let i = trails.length - 1; i >= 0; i--) { const tr = trails[i]; if (tr.done) { tr.fade -= dt * 1.5; if (tr.fade <= 0) { trails.splice(i, 1); continue; } }
+    for (let k = Math.max(0, tr.idx - 1); k < tr.pts.length; k += 2) { const p = tr.pts[k], tw = 0.55 + 0.45 * Math.sin(T * 6 + k * 0.6);
+      c.globalAlpha = 0.6 * tw * tr.fade; c.fillStyle = k % 4 ? '#fff3b0' : '#ffd1f0'; c.beginPath(); c.arc(p.x, p.y, 2.8, 0, TAU); c.fill(); } }
+  c.restore();
+}
+// slime: touching slimes stick together and stretch a gooey strand until it snaps
+const links = [];
+function linkSlime(a, b) { if (links.some(l => (l.a === a && l.b === b) || (l.a === b && l.b === a))) return; links.push({ a, b, t: 0 }); if (thr('slk', 300)) Snd.blorp(0.5); }
+function updateLinks(dt) {
+  for (let i = links.length - 1; i >= 0; i--) { const l = links[i], a = l.a, b = l.b; l.t += dt;
+    if (a.dead || b.dead || !a.visible() || !b.visible()) { links.splice(i, 1); continue; }
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, rr = a.r + b.r;
+    if (d > rr * 2.4 || l.t > 9) { Snd.thwip(); drops((a.x + b.x) / 2, (a.y + b.y) / 2 - rr * 0.25, 6, a.col); a.impulse(dx / d * 150, 0); b.impulse(-dx / d * 150, 0); links.splice(i, 1); continue; }
+    if (d > rr * 0.9) { const f = (d - rr * 0.9) * 3 * dt, nx = dx / d, ny = dy / d;
+      if (a.state !== 'held' && a.state !== 'walk') { a.vx += nx * f * 2.5; a.vy += ny * f * 2.5; if (a.state === 'idle' && a.z <= 0) a.state = 'fly'; }
+      if (b.state !== 'held' && b.state !== 'walk') { b.vx -= nx * f * 2.5; b.vy -= ny * f * 2.5; if (b.state === 'idle' && b.z <= 0) b.state = 'fly'; } } }
+}
+function drawLinks(c) {
+  for (const l of links) { const a = l.a, b = l.b, rr = a.r + b.r;
+    let ax = a.x, ay = a.y - a.z - a.r * 0.32, bx = b.x, by = b.y - b.z - b.r * 0.32; const d = Math.hypot(bx - ax, by - ay); if (d < rr * 1.05) continue;
+    const ux = (bx - ax) / d, uy = (by - ay) / d; ax += ux * a.r * 0.8; ay += uy * a.r * 0.5; bx -= ux * b.r * 0.8; by -= uy * b.r * 0.5;
+    const gap = Math.hypot(bx - ax, by - ay), th = Math.max(2, Math.min(a.r, b.r) * 0.45 * clamp(1 - (d - rr * 1.05) / (rr * 1.35), 0.06, 1)), mx = (ax + bx) / 2, my = (ay + by) / 2 + gap * 0.18;
+    const g = c.createLinearGradient(ax, ay, bx, by); g.addColorStop(0, css(a.col, 0.92)); g.addColorStop(1, css(b.col, 0.92));
+    c.lineCap = 'round'; c.strokeStyle = g; c.lineWidth = th; c.beginPath(); c.moveTo(ax, ay); c.quadraticCurveTo(mx, my, bx, by); c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = th * 0.25; c.beginPath(); c.moveTo(ax, ay - th * 0.2); c.quadraticCurveTo(mx, my - th * 0.25, bx, by - th * 0.2); c.stroke(); }
+}
+function mergeMerc(a, b) {
+  const big = a.r >= b.r ? a : b, small = big === a ? b : a, A = a.r * a.r, B = b.r * b.r;
+  big.x = (a.x * A + b.x * B) / (A + B); big.y = (a.y * A + b.y * B) / (A + B);
+  big.setRadius(Math.min(Math.sqrt(A + B), baseR * 1.4)); big.walls(true); big.resetInertia(); big.impulse(0, 220); big.mergeCD = 0.6;
+  big.mood = 'giggle'; big.moodT = 1; big.giggle(0.6, 0, 0.15); small.dead = true; small.e = 0; Snd.blop(); sparks(big.x, big.cy, 8, big.r * 0.8);
 }
 function sandTap(x, y) {
   const g = toGrid(x, y); stamp(g[0], g[1], 0, 0, brushR() * 0.7, 0.06, 0, paintColor(), 0.7); grains(x, y, 10, sandColorAt(x, y), 0.8); ringP(x, y, 26); Snd.pff();
@@ -1007,9 +1308,9 @@ let swish = 0, whirlSnd = 0;
 function updatePointers(dt) {
   let sw = 0, wh = 0; const now = performance.now();
   for (const p of ptrs.values()) {
-    if (p.mode === 'sprite') { const s = p.s; if (!s || s.dead || s.state === 'dive' || s.state === 'sink') { p.mode = 'none'; continue; }
+    if (p.mode === 'sprite') { const s = p.s; if (!s || s.dead || s.popped || s.state === 'dive' || s.state === 'sink') { p.mode = 'none'; continue; }
       if (p.moved && s.state !== 'held' && !s.pile) s.beginDrag(p);
-      else if (!p.moved && s.state !== 'held' && !s.pressing && now - p.t0 > 230 && (s.state === 'idle' || s.state === 'fly')) s.beginPress();
+      else if (!p.moved && !p.pressed && s.state !== 'held' && !s.pressing && now - p.t0 > 230 && (s.state === 'idle' || s.state === 'fly')) { p.pressed = true; s.beginPress(); }
       if (s.state === 'held' && s.mat === 'sand') sw += Math.hypot(s.vx, s.vy) * 0.6;
     } else if (p.mode === 'sand') {
       p.speed += (p.dist / dt - p.speed) * Math.min(1, dt * 12); p.dist = 0; sw += p.speed;
@@ -1061,7 +1362,7 @@ onBtn($('#bSun'), () => {
   $('#sunIc').textContent = nightTarget ? '☀️' : '🌙'; $('#sunLbl').textContent = nightTarget ? 'Day' : 'Night';
   $('#bSun').style.setProperty('--c', nightTarget ? 'linear-gradient(180deg,#ffe27a,#ffb23f)' : 'linear-gradient(180deg,#8f86e8,#4b3fa8)');
   nightTarget ? Snd.night() : Snd.day();
-  for (const s of sprites) if (s.visible() && !s.ptr && Math.random() < 0.7) { s.arms(0.8); s.mood = nightTarget ? 'surprised' : 'giggle'; s.moodT = 0.8; }
+  for (const s of sprites) if (s.visible() && !s.ptr && s.state !== 'walk' && Math.random() < 0.7) { s.arms(0.8); s.mood = nightTarget ? 'surprised' : 'giggle'; s.moodT = 0.8; }
 });
 onBtn($('#bWave'), () => { closePicker(); startWave(); });
 onBtn($('#bSummon'), () => { picker.classList.toggle('open'); Snd.pop(picker.classList.contains('open') ? 650 : 500, 0.15); });
@@ -1080,7 +1381,7 @@ window.addEventListener('resize', () => layout());
 window.addEventListener('orientationchange', () => setTimeout(layout, 120));
 
 // ---------- main loop ----------
-let last = performance.now(), peekTimer = 2.5, ambT = 0, lastCount = -1;
+let last = performance.now(), peekTimer = 2.5, ambT = 0, lastCount = -1, lastDt = 0.016;
 const countEl = $('#countTxt');
 function drawSpiral(c, x, y, R, str, rot) {
   if (str <= 0.02) return; c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
@@ -1093,7 +1394,9 @@ function drawSpiral(c, x, y, R, str, rot) {
 }
 function drawFx() {
   const c = ctx; c.setTransform(DPR, 0, 0, DPR, 0, 0); c.clearRect(0, 0, W, H);
+  drawTrails(c, lastDt);
   for (const s of sprites) s.drawLip(c);
+  drawLinks(c);
   for (const p of ptrs.values()) if (p.mode === 'sand' && p.wstr > 0) drawSpiral(c, p.wx, p.wy, 14 + p.wstr * 34 + 10, Math.min(1, p.wstr * 1.6), -T * 7);
   for (const w of whirls) drawSpiral(c, w.x, w.y, w.R, 0.7 * w.life / w.max, -T * 8);
   drawParticles(c);
@@ -1101,16 +1404,18 @@ function drawFx() {
 function loop(now) {
   requestAnimationFrame(loop);
   let dt = (now - last) / 1000; last = now; if (dt > 0.05) dt = 0.05; if (dt <= 0) return; T += dt;
-  updatePointers(dt); updateWhirls(dt); updateWave(dt);
+  updatePointers(dt); updateWhirls(dt); updateWave(dt); updateLinks(dt); lastDt = dt;
   for (const s of sprites) s.update(dt);
   for (let i = 0; i < sprites.length; i++) for (let j = i + 1; j < sprites.length; j++) {
-    const a = sprites[i], b = sprites[j]; if (!a.visible() || !b.visible() || a.z > 20 || b.z > 20) continue;
+    const a = sprites[i], b = sprites[j]; if (a.dead || b.dead || !a.visible() || !b.visible() || a.z > (a.M.hover ? 45 : 20) || b.z > (b.M.hover ? 45 : 20)) continue;
     const dx = b.x - a.x, dy = (b.y - a.y) * 1.4, d = Math.hypot(dx, dy) || 1, md = (a.r + b.r) * 0.85;
+    if (a.mat === 'mercury' && b.mat === 'mercury' && d < md * 0.95 && a.mergeCD <= 0 && b.mergeCD <= 0 && !a.ptr && !b.ptr && a.state !== 'walk' && b.state !== 'walk') { mergeMerc(a, b); continue; }
+    if (d < md && a.mat === 'slime' && b.mat === 'slime') linkSlime(a, b);
     if (d < md) { const push = (md - d) / 2, nx = dx / d, ny = dy / d;
       if (a.state !== 'held') { a.x -= nx * push; a.y -= ny * push / 1.4; } if (b.state !== 'held') { b.x += nx * push; b.y += ny * push / 1.4; }
       const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
       if (rv < -200) { if (a.state !== 'held') { a.vx += rv * nx * 0.5; a.vy += rv * ny * 0.5; } if (b.state !== 'held') { b.vx -= rv * nx * 0.5; b.vy -= rv * ny * 0.5; }
-        if (thr('boop', 120)) { Snd.boop(Math.min(1, -rv / 800)); if (a.mat === 'jelly' || b.mat === 'jelly') Snd.bloing(0.5, 280); } a.mood = b.mood = 'giggle'; a.moodT = b.moodT = 0.7; } }
+        if (thr('boop', 120)) { Snd.boop(Math.min(1, -rv / 800)); MSND[a.mat].land(0.5); } a.mood = b.mood = 'giggle'; a.moodT = b.moodT = 0.7; } }
   }
   if (sprites.some(s => s.dead)) { for (const s of sprites) if (s.dead && s.slot >= 0) { slotFree.push(s.slot); s.slot = -1; } sprites = sprites.filter(s => !s.dead); }
   peekTimer -= dt; if (peekTimer <= 0) { peekTimer = rand(5, 10); let pk = 0; for (const s of sprites) if (s.state === 'peek') pk++; if (pk < 2 && activeCount() + pk < 8) spawnPeek(); }
