@@ -22,7 +22,7 @@ body{position:fixed;inset:0}
   linear-gradient(180deg,#a8744a,#86552f 45%,#6d4024)}
 #frame.night{filter:brightness(.42) saturate(.75) hue-rotate(-12deg)}
 #gl{position:fixed;left:0;top:0}
-#tray{position:fixed;border-radius:16px;pointer-events:none;box-shadow:inset 0 7px 16px rgba(50,20,5,.5),inset 0 -3px 10px rgba(50,20,5,.28),inset 6px 0 12px rgba(50,20,5,.22),inset -6px 0 12px rgba(50,20,5,.22),0 0 0 2px rgba(40,15,0,.45),0 0 0 5px rgba(255,220,170,.12)}
+#tray{position:fixed;border-radius:12px;pointer-events:none;box-shadow:inset 0 7px 16px rgba(50,20,5,.5),inset 0 -3px 10px rgba(50,20,5,.28),inset 6px 0 12px rgba(50,20,5,.22),inset -6px 0 12px rgba(50,20,5,.22),0 0 0 2px rgba(40,15,0,.45),0 0 0 5px rgba(255,220,170,.12)}
 #fx{position:fixed;left:0;top:0;touch-action:none}
 #ui{position:fixed;inset:0;pointer-events:none}
 #ui>*{pointer-events:auto}
@@ -131,17 +131,17 @@ function layout() {
   const oTX = TX, oTY = TY, oTW = TW, oTH = TH;
   W = window.innerWidth; H = window.innerHeight;
   const si = safeInsets();
-  F = Math.round(clamp(Math.min(W, H) * 0.03, 12, 28));
-  TX = F + si.l; TY = F + si.t; TW = W - TX - F - si.r; TH = H - TY - F - si.b;
+  F = Math.round(clamp(Math.min(W, H) * 0.016, 8, 14));
+  TX = Math.max(F, si.l); TY = Math.max(F, si.t); TW = W - TX - Math.max(F, si.r); TH = H - TY - Math.max(F, si.b);
   Object.assign(trayEl.style, { left: TX + 'px', top: TY + 'px', width: TW + 'px', height: TH + 'px' });
   for (const c of [glc, fx]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); c.style.width = W + 'px'; c.style.height = H + 'px'; }
   baseR = clamp(Math.min(TW, TH) * 0.07, 34, 68);
-  const pad = 14;
-  $('#tools').style.right = (F + si.r + pad + 4) + 'px'; $('#tools').style.bottom = (F + si.b + pad + 22) + 'px';
-  $('#picker').style.right = (F + si.r + pad) + 'px'; $('#picker').style.bottom = (F + si.b + pad + 22 + 110) + 'px';
-  $('#parent').style.right = (F + si.r + pad) + 'px'; $('#parent').style.top = (F + si.t + pad) + 'px';
-  $('#palette').style.left = (F + si.l + pad) + 'px';
-  $('#count').style.left = (F + si.l + pad) + 'px'; $('#count').style.top = (F + si.t + pad) + 'px';
+  const pad = 14, R_ = W - TX - TW, B_ = H - TY - TH;
+  $('#tools').style.right = (R_ + pad + 4) + 'px'; $('#tools').style.bottom = (B_ + pad + 22) + 'px';
+  $('#picker').style.right = (R_ + pad) + 'px'; $('#picker').style.bottom = (B_ + pad + 22 + 110) + 'px';
+  $('#parent').style.right = (R_ + pad) + 'px'; $('#parent').style.top = (TY + pad) + 'px';
+  $('#palette').style.left = (TX + pad) + 'px';
+  $('#count').style.left = (TX + pad) + 'px'; $('#count').style.top = (TY + pad) + 'px';
   if (oTW > 0) for (const s of sprites) { s.x = TX + (s.x - oTX) / oTW * TW; s.y = TY + (s.y - oTY) / oTH * TH; s.resetInertia(); }
   setupSim();
 }
@@ -287,8 +287,8 @@ const FS_SAND = `
 void main(){
   vec2 c = cssOf(gl_FragCoord.xy);
   vec2 q = c - uTray.xy - uTray.zw*0.5;
-  vec2 d = abs(q) - (uTray.zw*0.5 - 16.0);
-  float sd = length(max(d,0.0)) + min(max(d.x,d.y),0.0) - 16.0;
+  vec2 d = abs(q) - (uTray.zw*0.5 - 12.0);
+  float sd = length(max(d,0.0)) + min(max(d.x,d.y),0.0) - 12.0;
   float m = clamp(0.5 - sd*uDpr, 0.0, 1.0);
   if (m <= 0.0) discard;
   gl_FragColor = vec4(sandAt(c)*m, m);
@@ -808,6 +808,7 @@ class Sprite {
       this.hx[i] = (cx + dx * cs - dy * sn) * this.psx; this.hy[i] = (cy + dx * sn + dy * cs) * this.psy * br;
       this.faceX[i] = dx / this.r; this.faceY[i] = dy / this.r; }
   }
+  snapShape() { this.computeHomes(); for (let i = 0; i < NB; i++) { this.px[i] = this.hx[i]; this.py[i] = this.hy[i]; this.vxs[i] = this.vys[i] = 0; } }
   resetInertia() { this.lastX = this.x; this.lastY = this.y - this.z; this.lastVx = 0; this.lastVy = 0; }
   get ax() { return this.x; }
   get ay() { return this.y - this.z + (1 - this.e) * this.bodyH; }
@@ -835,11 +836,12 @@ class Sprite {
     const area = (X, Y) => { let a = 0; for (let i = 0; i < n; i++) { const j = (i + 1) % n; a += X[i] * Y[j] - X[j] * Y[i]; } return Math.abs(a) * 0.5; };
     const A0 = area(this.hx, this.hy), damp = Math.exp(-M.damp * h), grounded = this.z <= 0.5 && this.state !== 'held';
     for (let s = 0; s < sub; s++) {
-      const A = area(this.px, this.py), aF = M.area * (A0 - A) / Math.max(A0, 1) * this.r;
+      const A = area(this.px, this.py), aF = M.area * clamp((A0 - A) / Math.max(A0, Math.PI * this.r * this.r * 0.25), -0.6, 1.4) * this.r;
       let cx = 0, cy = 0; for (let i = 0; i < n; i++) { cx += this.px[i]; cy += this.py[i]; } cx /= n; cy /= n;
       for (let i = 0; i < n; i++) {
         const ip = (i + 1) % n, im = (i + n - 1) % n;
-        let ax = kh * (this.hx[i] - this.px[i]), ay = kh * (this.hy[i] - this.py[i]);
+        const ex = this.hx[i] - this.px[i], ey = this.hy[i] - this.py[i]; let ax = kh * ex, ay = kh * ey;
+        const ed = Math.hypot(ex, ey), lim = this.r * 1.1; if (ed > lim) { const kk = (ed - lim) / ed * 700; ax += ex * kk; ay += ey * kk; }  // stiffens when stretched too far
         for (let q = 0; q < 2; q++) { const j = q ? im : ip, dx = this.px[j] - this.px[i], dy = this.py[j] - this.py[i], d = Math.hypot(dx, dy) || 1e-3,
           L0 = Math.hypot(this.hx[j] - this.hx[i], this.hy[j] - this.hy[i]), f = ke * (d - L0) / d; ax += dx * f; ay += dy * f; }
         ax += M.bend * ((this.px[im] + this.px[ip]) * 0.5 - this.px[i] - ((this.hx[im] + this.hx[ip]) * 0.5 - this.hx[i]));
@@ -851,11 +853,15 @@ class Sprite {
       for (let i = 0; i < n; i++) { const ip = (i + 1) % n, im = (i + n - 1) % n;
         TV[0][i] = this.vxs[i] + ((this.vxs[im] + this.vxs[ip]) * 0.5 - this.vxs[i]) * M.visc; TV[1][i] = this.vys[i] + ((this.vys[im] + this.vys[ip]) * 0.5 - this.vys[i]) * M.visc; }
       this.vxs.set(TV[0]); this.vys.set(TV[1]);
-      for (let i = 0; i < n; i++) { this.px[i] += this.vxs[i] * h; this.py[i] += this.vys[i] * h;
+      for (let i = 0; i < n; i++) { const vl = Math.hypot(this.vxs[i], this.vys[i]); if (vl > 2500) { this.vxs[i] *= 2500 / vl; this.vys[i] *= 2500 / vl; }
+        this.px[i] += this.vxs[i] * h; this.py[i] += this.vys[i] * h;
         if (grounded && this.py[i] > 0) { this.py[i] = 0; if (this.vys[i] > 0) this.vys[i] *= -0.1; this.vxs[i] *= 0.85; } }
     }
     this.fx_.fill(0); this.fy_.fill(0);
-    for (let i = 0; i < n; i++) if (!(Math.abs(this.px[i]) < 1e4) || !(Math.abs(this.py[i]) < 1e4)) { this.px[i] = this.hx[i]; this.py[i] = this.hy[i]; this.vxs[i] = this.vys[i] = 0; }
+    // safety net: if the outline ever tangles or flies apart, snap it back to its rest shape
+    let far = 0; for (let i = 0; i < n; i++) far = Math.max(far, Math.hypot(this.px[i] - this.hx[i], this.py[i] - this.hy[i]));
+    const Af = area(this.px, this.py);
+    if (!(far < this.r * 3) || !(Af > A0 * 0.15) || !(Af < A0 * 4)) this.snapShape();
   }
   // --- interactions ---
   tap(wx, wy) {
@@ -935,7 +941,7 @@ class Sprite {
     if (!this.popped) return; this.popT += dt;
     if (this.popT > 0.7 && this.popT - dt <= 0.7) for (let i = 0; i < 10; i++) { const a = rand(0, TAU), d = rand(1.2, 2.4) * this.r;
       addP({ t: 'mb', x: this.x + Math.cos(a) * d, y: this.cy + Math.sin(a) * d * 0.7, sp: this, k: rand(2, 4), max: 1.2, s: rand(4, 9) }); }
-    if (this.popT > 1.5) { this.popped = false; this.psx = this.psy = 0.25; this.tsx = this.tsy = 1; this.poseRate = 4; this.resetInertia();
+    if (this.popT > 1.5) { this.popped = false; this.psx = this.psy = 0.25; this.tsx = this.tsy = 1; this.poseRate = 4; this.vx = this.vy = 0; this.walls(true); this.snapShape(); this.resetInertia();
       Snd.bubbles(4, 0.8, true); Snd.bloop(); this.giggle(0.8, 0, 0.3); this.arms(1); sparks(this.x, this.cy, 8, this.r); }
   }
   // mercury: splits into two droplets; touching droplets merge again
@@ -1104,8 +1110,8 @@ class Sprite {
     }
     // inertia: the body lags behind sudden changes of motion (this is what makes landings squash and drags stretch)
     const svx = (this.x - this.lastX) / dt, svy = ((this.y - this.z) - this.lastY) / dt;
-    let dvx = svx - this.lastVx, dvy = svy - this.lastVy; const dl = Math.hypot(dvx, dvy); if (dl > 1400) { dvx *= 1400 / dl; dvy *= 1400 / dl; }
-    this.impulse(-dvx * M.inertia, -dvy * M.inertia);
+    let dvx = (svx - this.lastVx) * M.inertia, dvy = (svy - this.lastVy) * M.inertia; const dl = Math.hypot(dvx, dvy); if (dl > 650) { dvx *= 650 / dl; dvy *= 650 / dl; }
+    this.impulse(-dvx, -dvy);
     this.lastVx = svx; this.lastVy = svy; this.lastX = this.x; this.lastY = this.y - this.z;
     this.softStep(dt);
   }
