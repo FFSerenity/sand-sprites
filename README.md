@@ -26,10 +26,11 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 | 🍮 Jelly | round, ears, horns… | see-through, wobbly, fruit inside; drag two together to merge — new colours make a **layered rainbow jelly** |
 | 🧈 Butter | small block | fingerprints stay, softens slowly in the sun; **drag it onto a sand sprite and the two knead into a slime** |
 | 🟢 Slime | droopy blob | matte modelling clay, keeps fingerprints; drag two together for a **marbled multi-colour clay** |
-| 🫧 Bubble | sphere | floats; squeeze it to **POP!**, then it drifts back together |
+| 🫧 Bubble | sphere | floats; squeeze it to **POP!**, then it drifts back together; **drag it onto another sprite (or a sprite into it) to catch it inside** — tap the bubble to pop it free |
 | ☁️ Marshmallow | cylinder | memory-foam squish; drag two together to merge — new colours make a **swirled marshmallow** |
 | 🧊 Ice | cube | slides far; **each tap cracks it**, the fifth shatters it into little cubes |
 | 🪩 Mercury | droplet | mirror surface; splits into droplets — **drag them together to merge**, bigger and bigger |
+| 🌈 Rainbow | star | glossy flowing rainbow; **drag it onto any sprite to give it a new colour** (a different one each touch) and it paints rainbow trails in the sand |
 
 Sprites are soft bodies (a ring of springs keeping shape, volume and curvature) rendered with WebGL shaders.
 All graphics and sounds are generated in code; the only image files are the app icons.

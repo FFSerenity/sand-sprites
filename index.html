@@ -59,7 +59,7 @@ body{position:fixed;inset:0}
 #book .tile .stars{position:absolute;bottom:3px;left:0;right:0;font-size:clamp(8px,1.4vmin,12px);letter-spacing:-1px;text-shadow:none}
 #book .close{position:absolute;right:14px;top:14px;--b:44px;font-size:20px;--c:linear-gradient(180deg,#ffa3b1,#ff5d73)}
 @keyframes bump{40%{transform:scale(1.18)}}
-#picker{position:fixed;display:grid;grid-template-columns:repeat(4,var(--m));gap:30px 14px;padding:14px 16px 32px;border-radius:30px;background:rgba(60,30,85,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.35);--m:clamp(56px,9vmin,82px);
+#picker{position:fixed;display:grid;grid-template-columns:repeat(3,var(--m));gap:30px 14px;padding:14px 16px 32px;border-radius:30px;background:rgba(60,30,85,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.35);--m:clamp(56px,9vmin,82px);
   transform-origin:100% 100%;transform:scale(.4);opacity:0;pointer-events:none;transition:transform .22s cubic-bezier(.3,1.6,.5,1),opacity .15s}
 #picker.open{transform:scale(1);opacity:1;pointer-events:auto}
 .mbtn{--b:var(--m)}
@@ -363,7 +363,7 @@ void main(){
   float diff = max(dot(N, LIGHT), 0.0);
   vec3 Hh = normalize(LIGHT + vec3(0.0,0.0,1.0));
   float nh = max(dot(N, Hh), 0.0);
-  vec3 col = uCol; vec3 spec = vec3(0.0); float faceK = 1.0; float m = uMat;
+  vec3 col = uCol; vec3 spec = vec3(0.0); float faceK = 1.0; float m = uMat; float alpha = 1.0;
   if (m < 0.5) {
     // SAND: matte grains that move with the body, crumbly edge
     vec2 gp = vFace.x > 5.0 ? floor(vCss / 1.5) : floor(vFace * uR / 1.5 + uSeed * 13.0);
@@ -441,7 +441,12 @@ void main(){
     col = mix(col, vec3(1.0), smoothstep(0.93, 1.0, rho)*0.35);
     spec = vec3(pow(nh, 220.0)*2.0 + pow(max(dot(N, normalize(vec3(0.45,0.5,0.75))),0.0), 90.0)*0.6);
     col = mix(col, col*vec3(.42,.44,.66) + irid*0.25, uNight*0.8);
+    col *= mix(vec3(1.0), uCol, 0.35);
     faceK = 0.9;
+    if (uP.x > 0.5) { // holding a sprite inside: just the film, so the passenger shows through
+      alpha = 0.10 + 0.55*rim*rim + 0.3*smoothstep(0.92, 1.0, rho);
+      col = mix(irid*(0.55 + 0.45*rim), vec3(1.0), smoothstep(0.92, 1.0, rho)*0.5) * mix(vec3(1.0), uCol, 0.35);
+      faceK = 0.0; }
   } else if (m < 5.5) {
     // MARSHMALLOW: soft, powdery, matte
     float wrap = max((dot(N, LIGHT) + 0.5)/1.5, 0.0);
@@ -472,25 +477,37 @@ void main(){
     vec2 gq = floor(vFace*uR/2.0);
     spec = vec3(pow(max(dot(Nf, Hh),0.0), 120.0)*1.8 + step(0.975, hash(gq+uSeed))*pow(max(0.0, sin(uTime*3.0 + hash(gq)*40.0)), 12.0)*1.2);
     col = mix(col, col*vec3(.45,.55,.85) + vec3(0.08,0.18,0.32), uNight*0.8);
-  } else {
+  } else if (m < 7.5) {
     // MERCURY: liquid mirror that reflects the sand around it
     vec3 env = sandAt(vCss - N.xy*uR*1.6);
     col = mix(env, vec3(0.82,0.85,0.92), 0.45)*0.85 + vec3(0.08,0.09,0.11);
     col *= 0.55 + 0.6*smoothstep(0.55, -0.55, N.y);
     col += vec3(0.9,0.95,1.0)*smoothstep(0.08, 0.0, abs(N.y + 0.25))*0.25*hz;
     col = mix(col, vec3(0.93,0.96,1.0), pow(1.0 - N.z, 1.6)*0.55);
-    col *= mix(vec3(1.0), uCol, 0.18);
+    col *= mix(vec3(1.0), uCol, 0.5) * 1.05;
     spec = vec3(pow(nh, 220.0)*2.2 + pow(nh, 30.0)*0.3);
     col = mix(col, col*vec3(.45,.48,.72), uNight*0.7);
     faceK = 0.95;
+  } else {
+    // RAINBOW: glossy candy star with flowing rainbow bands and twinkles (glows a little at night)
+    float t = vFace.y*0.36 + vFace.x*0.14 - uTime*0.12 + uSeed*0.1;
+    vec3 rb = clamp(abs(mod(t*6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    rb = mix(vec3(1.0), rb, 0.7);
+    float wrap = max((dot(N, LIGHT) + 0.4)/1.4, 0.0);
+    col = rb * (0.6 + 0.5*wrap);
+    col += vec3(1.0) * pow(1.0 - hz, 2.0) * 0.2;
+    col *= 1.0 - 0.1*clamp(dentSum, 0.0, 1.0);
+    vec2 gq = floor(vFace*uR/3.0 + uSeed*5.0);
+    col += step(0.965, hash(gq)) * pow(max(0.0, sin(uTime*4.0 + hash(gq + 2.0)*40.0)), 8.0) * 0.9;
+    spec = vec3(pow(nh, 80.0)*1.1 + pow(nh, 14.0)*0.15);
+    col = mix(col, col*vec3(.6,.6,.85) + rb*0.3, uNight*0.7);
   }
   vec2 fuv = vFace / 2.6 + 0.5;
   if (uFaceOn > 0.0 && fuv.x > 0.01 && fuv.y > 0.01 && fuv.x < 0.99 && fuv.y < 0.99) {
     vec4 f = texture2D(uFace, uSlot.xy + fuv * uSlot.zw);
     col = mix(col, f.rgb, f.a * uFaceOn * faceK);
   }
-  col += spec;
-  gl_FragColor = vec4(col * mask, mask);
+  gl_FragColor = vec4((col * alpha + spec) * mask, mask * alpha);
 }`;
 
 let faceFrame = 0, gl = null, progSand, progSh, progSp, bufTri, bufSh, bufSp, ibSp, glTexA, glTexB, glTexFace, texW = 0, texH = 0, faceTexInit = false;
@@ -571,7 +588,7 @@ function renderGL() {
   gl.useProgram(progSand); setCommon(US);
   gl.bindBuffer(gl.ARRAY_BUFFER, bufTri); attribs(1); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
   // shadows
-  const order = sprites.filter(s => s.e > 0.001 && !s.popped).sort((a, b) => a.y - b.y);
+  const order = sprites.filter(s => s.e > 0.001 && !s.popped && s.state !== 'caught').sort((a, b) => a.y - b.y);
   let n = 0; const need = order.length * 2 * 48; if (shBuf.length < need) shBuf = new Float32Array(need);
   const quad = (cx, cy, rx, ry, c, a) => { const P = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
     for (const p of P) { shBuf[n++] = cx + p[0] * rx; shBuf[n++] = cy + p[1] * ry; shBuf[n++] = p[0]; shBuf[n++] = p[1]; shBuf[n++] = c[0]; shBuf[n++] = c[1]; shBuf[n++] = c[2]; shBuf[n++] = a; } };
@@ -584,12 +601,13 @@ function renderGL() {
   // every sprite mesh goes into one array and one upload per frame; each piece is then drawn by offset
   let off = 0; const parts = [];
   const room = n => { if ((off + n) * 6 > spAll.length) { const g = new Float32Array(Math.max(spAll.length * 2, (off + n) * 6)); g.set(spAll.subarray(0, off * 6)); spAll = g; } return spAll.subarray(off * 6); };
-  for (const s of order) {
+  const emit = s => {
     for (const side of [-1, 1]) if (s.armMesh(room(1 + NB), side)) { parts.push(s, 0, off, NB * 3, null); off += 1 + NB; }
     if (s.isLetter) { const m = s.mesh; if (!m.ib || m.gl !== gl) { m.ib = gl.createBuffer(); m.gl = gl; gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, m.ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.I, gl.STATIC_DRAW); }
       const cnt = s.letterVerts(room(m.n)); parts.push(s, 1, off, m.I.length, m.ib); off += cnt; }
     else { s.bodyMesh(room(NV)); parts.push(s, 1, off, ibSp.count, null); off += NV; }
-  }
+  };
+  for (const s of order) { const c = s.captive; if (c && c.state === 'caught' && !c.dead && c.e > 0.001) emit(c); emit(s); }
   if (!off) return;
   gl.bufferData(gl.ARRAY_BUFFER, spAll.subarray(0, off * 6), gl.DYNAMIC_DRAW);
   let cur = null, faceOn = -1, ibCur = null;
@@ -839,8 +857,9 @@ const MATS = {
   marsh:  { id: 5, name: 'Marshmallow', ic: '☁️', c: 'linear-gradient(180deg,#fff,#ffcfe4)',    home: 70,  edge: 300, area: 400, bend: 400, visc: 0.45, damp: 13, inertia: 0.3,  pressK: 1400, pokeK: 0.6,  follow: 15, grabK: 200, jump: 0.9,  dentDecay: 0.9,  dentW: 0.4,  friction: 8,   walk: 210, bob: 9,  arms: true,  size: 1.0 },
   ice:    { id: 6, name: 'Ice',         ic: '🧊', c: 'linear-gradient(180deg,#e6fbff,#86d6f2)', home: 900, edge: 1200, area: 400, bend: 900, visc: 0.3, damp: 16, inertia: 0.04, pressK: 200,  pokeK: 0.08, follow: 22, grabK: 0,   jump: 0.8,  dentDecay: 20,   dentW: 0.2,  friction: 1.2, walk: 260, bob: 0,  arms: true,  size: 0.9, noDent: true },
   mercury:{ id: 7, name: 'Mercury',     ic: '🪩', c: 'linear-gradient(180deg,#f2f4f8,#a8afbd)', home: 28,  edge: 90,  area: 750, bend: 90,  visc: 0.28, damp: 5,  inertia: 0.95, pressK: 900,  pokeK: 1.2,  follow: 7,  grabK: 200, jump: 0.6,  dentDecay: 6,    dentW: 0.35, friction: 3,   walk: 200, bob: 0,  arms: false, size: 0.85 },
+  rainbow:{ id: 8, name: 'Rainbow',     ic: '🌈', c: 'linear-gradient(135deg,#ff6b8b,#ffb34d 25%,#ffe55c 45%,#6be38a 62%,#5ab8ff 80%,#b07cff)', home: 120, edge: 320, area: 500, bend: 360, visc: 0.2, damp: 6, inertia: 0.5, pressK: 900, pokeK: 0.7, follow: 14, grabK: 170, jump: 1.1, dentDecay: 3, dentW: 0.3, friction: 8, walk: 230, bob: 10, arms: true, size: 1.05 },
 };
-const AVAIL = ['jelly', 'sand', 'butter', 'slime', 'bubble', 'marsh', 'ice', 'mercury'];
+const AVAIL = ['jelly', 'sand', 'butter', 'slime', 'bubble', 'marsh', 'ice', 'mercury', 'rainbow'];
 const MSND = {
   sand:    { tap: () => Snd.crunch(1),            press: () => Snd.crunch(1.2),          knead: () => Snd.crunch(0.5),          release: () => Snd.pour(0.5),                                              land: v => Snd.crunch(v) },
   jelly:   { tap: () => Snd.bloing(1, rand(220, 300)), press: () => Snd.squelch(0.9),    knead: () => Snd.squelch(0.45),        release: () => { Snd.shlurp(0.8); Snd.bloing(0.8, rand(240, 300)); },     land: v => Snd.splat(v) },
@@ -849,6 +868,7 @@ const MSND = {
   bubble:  { tap: () => Snd.softBoing(1),         press: () => {},                       knead: () => {},                       release: () => {},                                                         land: v => Snd.softBoing(v * 0.6) },
   marsh:   { tap: () => Snd.pfff(1),              press: () => Snd.foam(1),              knead: () => Snd.pfff(0.5),            release: () => Snd.fwump(1),                                               land: v => Snd.pfff(v) },
   ice:     { tap: () => Snd.clink(1),             press: () => Snd.crack(1),             knead: () => Snd.crack(0.5),           release: () => Snd.clink(0.8),                                             land: v => Snd.clink(v) },
+  rainbow: { tap: () => Snd.chimes(pick([[1046.5, 1318.5, 1568], [1174.7, 1568, 1975.5], [1318.5, 1568, 2093]]), 0.06, 0.09), press: () => Snd.magic(), knead: () => Snd.chimes([pick([1568, 1760, 2093, 2349])], 0, 0.07), release: () => Snd.chimes([2093, 1568, 1318.5, 1046.5].reverse(), 0.05, 0.08), land: v => Snd.chimes([pick([1318.5, 1568])], 0, 0.05 * v) },
   mercury: { tap: () => Snd.plink(1),             press: () => {},                       knead: () => {},                       release: () => {},                                                         land: v => Snd.plink(v * 0.8) },
 };
 const JELLY_COLS = [[0.95, 0.2, 0.35], [0.45, 0.85, 0.25], [0.2, 0.55, 1.0], [1.0, 0.55, 0.1], [0.62, 0.3, 0.95], [1.0, 0.8, 0.15], [1.0, 0.4, 0.65]];
@@ -863,6 +883,7 @@ function matColor(mat, x, y) {
     case 'bubble': return [0.9, 0.95, 1];
     case 'marsh': return pick(MARSH_COLS);
     case 'ice': return pick(ICE_COLS);
+    case 'rainbow': return hsl2rgb(Math.random(), 0.85, 0.62);
     case 'mercury': return pick([[0.9, 0.92, 0.98], [0.95, 0.92, 0.9], [0.9, 0.95, 0.95]]);
     default: { const c = mix(sandColorAt(x, y), pick(PAL), 0.3); const [h, s, l] = rgb2hsl(c[0], c[1], c[2]); return hsl2rgb(h, clamp(s * 1.1, 0.35, 0.85), clamp(l, 0.66, 0.84)); }
   }
@@ -883,6 +904,7 @@ function shapePts(kind, sh, r, tilt, X, Y) {
       case 'butter': x = se(c, 6) * 1.0 * r; y = se(s, 6) * 0.62 * r - 0.62 * r; break;
       case 'slime': x = c * r * (1 + 0.22 * Math.max(0, s)); y = (s < 0 ? s * 0.95 : s * 0.55) * r - 0.55 * r; break;
       case 'bubble': x = c * r; y = s * r - r; break;
+      case 'rainbow': { const rho = 0.74 + 0.3 * Math.pow(0.5 + 0.5 * Math.cos(5 * (a - UP)), 1.6); x = c * rho * r; y = s * rho * r - 0.84 * r; break; }
       case 'marsh': x = se(c, 3.2) * 0.85 * r; y = se(s, 3.2) * 0.98 * r - 0.98 * r; break;
       case 'ice': { const x0 = se(c, 7) * 0.92 * r, y0 = se(s, 7) * 0.88 * r, ct = Math.cos(tilt), st = Math.sin(tilt); x = x0 * ct - y0 * st; y = x0 * st + y0 * ct - 0.88 * r; break; }
       case 'mercury': x = c * 1.15 * r; y = (s < 0 ? s * 0.72 : s * 0.32) * r - 0.32 * r; break;
@@ -1025,6 +1047,7 @@ class Sprite {
   }
   // --- interactions ---
   tap(wx, wy) {
+    if (this.mat === 'bubble' && this.captive) { this.pop(); return; }
     const M = this.M, [lx, ly] = this.local(wx, wy);
     if (this.state === 'emerge') { this.e = 1; this.state = 'idle'; }
     if (this.state === 'walk') this.endWalk(false);
@@ -1054,6 +1077,7 @@ class Sprite {
       case 'marsh': fluff(wx, wy, (7 * k) | 0, 'rgba(255,255,255,0.9)'); break;
       case 'ice': sparks(wx, wy, (5 * k) | 0, 14, '#e8fbff'); break;
       case 'mercury': drops(wx, wy, (2 * k) | 0, [0.85, 0.88, 0.95]); sparks(wx, wy, (2 * k) | 0, 10); break;
+      case 'rainbow': for (let i = 0; i < (6 * k) | 0; i++) sparks(wx, wy, 1, 16, css(hsl2rgb(Math.random(), 0.9, 0.7))); break;
     }
   }
   grab(p) {
@@ -1100,14 +1124,14 @@ class Sprite {
   }
   // bubble: pops into little bubbles, then floats back together
   pop() {
-    if (this.popped) return; this.popped = true; this.popT = 0; this.ptr = null; this.state = 'idle'; Snd.popB(1);
+    if (this.popped) return; this.popped = true; this.popT = 0; this.ptr = null; this.state = 'idle'; Snd.popB(1); if (this.captive) releaseCaptive(this.captive, this);
     popFx(this.x, this.cy, this.r);
   }
   updatePop(dt) {
     if (!this.popped) return; this.popT += dt;
     if (this.popT > 0.7 && this.popT - dt <= 0.7) for (let i = 0; i < 10; i++) { const a = rand(0, TAU), d = rand(1.2, 2.4) * this.r;
       addP({ t: 'mb', x: this.x + Math.cos(a) * d, y: this.cy + Math.sin(a) * d * 0.7, sp: this, k: rand(2, 4), max: 1.2, s: rand(4, 9) }); }
-    if (this.popT > 1.5) { this.popped = false; this.psx = this.psy = 0.25; this.tsx = this.tsy = 1; this.poseRate = 4; this.vx = this.vy = 0; this.walls(true); this.snapShape(); this.resetInertia();
+    if (this.popT > 1.5) { if (this.rHome) { this.setRadius(this.rHome); this.rHome = 0; } this.popped = false; this.psx = this.psy = 0.25; this.tsx = this.tsy = 1; this.poseRate = 4; this.vx = this.vy = 0; this.walls(true); this.snapShape(); this.resetInertia();
       Snd.bubbles(4, 0.8, true); Snd.bloop(); this.giggle(0.8, 0, 0.3); this.arms(1); sparks(this.x, this.cy, 8, this.r); }
   }
   // mercury: splits into two droplets; touching droplets merge again
@@ -1233,7 +1257,7 @@ class Sprite {
       if (air) { this.vz -= GRAV * dt; this.z += this.vz * dt; this.x += this.vx * dt; this.y += this.vy * dt; if (this.z <= 0) { this.z = 0; this.land(); } }
       else { const sp = hyp(this.vx, this.vy);
         if (sp > 1) { const ox = this.x, oy = this.y; this.x += this.vx * dt; this.y += this.vy * dt; const f = Math.exp(-dt * (this.state === 'fly' ? Math.min(4, M.friction) : M.friction)); this.vx *= f; this.vy *= f;
-          if (sp > 40) { const a = toGrid(ox, oy), b = toGrid(this.x, this.y); const pc = this.mat === 'sand' || this.mat === 'butter' || this.mat === 'slime' ? this.col : null;
+          if (sp > 40) { const a = toGrid(ox, oy), b = toGrid(this.x, this.y); const pc = this.mat === 'sand' || this.mat === 'butter' || this.mat === 'slime' || this.mat === 'rainbow' ? this.col : null;
             plow(a[0], a[1], b[0], b[1], this.r / cellPx() * 0.45, 0.012, 0.6, pc, this.mat === 'butter' ? 0.15 + 0.25 * this.melt : 0.2);
             if (this.mat === 'ice' && Math.random() < sp / 800) sparks(this.x, this.y, 1, this.r * 0.5, '#e8fbff'); } }
         else this.vx = this.vy = 0;
@@ -1241,7 +1265,7 @@ class Sprite {
     }
     this.walls(false);
     const air2 = !M.hover && (this.z > 0 || this.vz > 0);
-    if (this.state === 'idle' && !this.ptr && !air2 && !this.pressing && !this.pile && !this.castle) { this.hopT -= dt; if (this.hopT <= 0) this.idleAct(); if (this.age > this.life && activeCount() > 3) this.dive(); }
+    if (this.state === 'idle' && !this.ptr && !air2 && !this.pressing && !this.pile && !this.castle) { this.hopT -= dt; if (this.hopT <= 0) this.idleAct(); if (this.age > this.life && activeCount() > 3 && !this.captive) this.dive(); }
   }
   throwFrom(p) {
     const h = p.hist; let vx = 0, vy = 0;
@@ -1282,10 +1306,11 @@ class Sprite {
     }
     for (let i = this.dents.length - 1; i >= 0; i--) { const d = this.dents[i]; if (!d.hold) { d.depth *= Math.exp(-dt * M.dentDecay * (this.mat === 'butter' ? 1 - 0.7 * this.melt : 1)); if (d.depth < 0.02) this.dents.splice(i, 1); } }
     // sand: heap at rest, ball when picked up or squeezed
-    if (this.mat === 'sand') { const want = (this.state === 'held' || this.pressing) && !this.pile && !this.castle ? 1 : 0;
+    if (this.mat === 'sand') { const want = (this.state === 'held' || this.state === 'caught' || this.pressing) && !this.pile && !this.castle ? 1 : 0;
       const prev = this.form; this.form += (want - this.form) * Math.min(1, dt * (want ? 7 : 2.2));
       if (prev > 0.6 && this.form <= 0.6 && thr('slump', 300)) { Snd.pour(0.35); grains(this.x, this.y - this.r * 0.4, 8, this.col, 0.4); } }
     this.updatePile(dt); this.updatePop(dt); this.updateMelt(dt);
+    if (this.mat === 'rainbow') { this.hue = (this.seed * 0.1 + T * 0.12) % 1; this.col = hsl2rgb(this.hue, 0.85, 0.62); this.cols[0] = this.col; }
     this.psx += (this.tsx - this.psx) * Math.min(1, dt * this.poseRate); this.psy += (this.tsy - this.psy) * Math.min(1, dt * this.poseRate);
     if (this.popped) { this.resetInertia(); return; }
     switch (this.state) {
@@ -1305,11 +1330,12 @@ class Sprite {
         const sp = hyp(this.vx, this.vy);
         if (sp > 900 && this.mood !== 'giggle') { this.mood = 'giggle'; this.moodT = 0.6; if (Math.random() < 0.3) this.giggle(0.6); }
         this.arms(0.2);
-        if (sp > 20 && !M.hover) { const a2 = toGrid(ox, oy), b2 = toGrid(this.x, this.y); plow(a2[0], a2[1], b2[0], b2[1], this.r / cellPx() * 0.42, 0.008, 0.4, this.col, this.mat === 'sand' ? 0.4 : 0.22);
+        if (sp > 20 && !M.hover) { const a2 = toGrid(ox, oy), b2 = toGrid(this.x, this.y); plow(a2[0], a2[1], b2[0], b2[1], this.r / cellPx() * (this.mat === 'rainbow' ? 0.5 : 0.42), 0.008, 0.4, this.col, this.mat === 'sand' ? 0.4 : this.mat === 'rainbow' ? 0.6 : 0.22);
           if (this.mat === 'sand' && Math.random() < sp / 1500) grains(this.x, this.y - this.r * 0.3, 2, this.col, 0.5); }
         break;
       }
       case 'idle': case 'fly': this.physics(dt); break;
+      case 'caught': followCage(this, dt); break;
     }
     // inertia: the body lags behind sudden changes of motion (this is what makes landings squash and drags stretch)
     const svx = (this.x - this.lastX) / dt, svy = ((this.y - this.z) - this.lastY) / dt;
@@ -1324,7 +1350,7 @@ class Sprite {
     const du = this.dentU; du.fill(0); this.dents.forEach((d, k) => { du[k * 4] = d.u; du[k * 4 + 1] = d.v; du[k * 4 + 2] = d.depth; du[k * 4 + 3] = d.w; });
     gl.uniform4fv(USP.uDents, du);
     const sx = (this.slot % SLOTS_X) * SLOT / ATLAS, sy = ((this.slot / SLOTS_X) | 0) * SLOT / ATLAS; gl.uniform4f(USP.uSlot, sx, sy, SLOT / ATLAS, SLOT / ATLAS);
-    if (this.mat === 'butter') gl.uniform4f(USP.uP, this.melt, 0, 0, 0); else if (this.mat === 'ice') gl.uniform4f(USP.uP, 0, this.crack / 5, 0, 0); else gl.uniform4f(USP.uP, this.fruit[0], this.fruit[1], this.fruit[2], this.fruit[3]);
+    if (this.mat === 'butter') gl.uniform4f(USP.uP, this.melt, 0, 0, 0); else if (this.mat === 'bubble') gl.uniform4f(USP.uP, this.captive ? 1 : 0, 0, 0, 0); else if (this.mat === 'ice') gl.uniform4f(USP.uP, 0, this.crack / 5, 0, 0); else gl.uniform4f(USP.uP, this.fruit[0], this.fruit[1], this.fruit[2], this.fruit[3]);
     const cu = this.colsU; cu.fill(0); this.cols.forEach((c, k) => { if (k < 4) { cu[k * 3] = c[0]; cu[k * 3 + 1] = c[1]; cu[k * 3 + 2] = c[2]; } });
     gl.uniform3fv(USP.uCols, cu); gl.uniform1f(USP.uNCol, Math.min(4, this.cols.length));
     if (this.e < 0.999) gl.uniform4f(USP.uClip, this.x, this.y, this.r * 1.1 * (0.55 + 0.45 * Math.min(1, this.e * 2)), 1); else gl.uniform4f(USP.uClip, 0, 0, 1, 0);
@@ -1355,7 +1381,7 @@ class Sprite {
     const k = 1 / (1 + this.z / 120), [cx] = this.centroid(), x = this.x + cx * 0.3 + this.z * 0.15, y = this.y + this.z * 0.1;
     const w = Math.max(0.6, (Math.max(...this.px) - Math.min(...this.px)) / (2 * r)) * r * k;
     switch (this.mat) {
-      case 'jelly': case 'slime': q(x + r * 0.1, y + r * 0.04, w * 1.05, r * 0.3 * k, mix(this.col, [0.25, 0.1, 0.2], 0.45), 0.42); q(x + r * 0.22, y + r * 0.05, w * 0.45, r * 0.12 * k, mix(this.col, [1, 1, 1], 0.6), 0.5 * k); break;
+      case 'jelly': case 'rainbow': q(x + r * 0.1, y + r * 0.04, w * 1.05, r * 0.3 * k, mix(this.col, [0.25, 0.1, 0.2], 0.45), 0.42); q(x + r * 0.22, y + r * 0.05, w * 0.45, r * 0.12 * k, mix(this.col, [1, 1, 1], 0.6), 0.5 * k); break;
       case 'ice': q(x + r * 0.1, y + r * 0.04, w * 1.0, r * 0.28 * k, [0.3, 0.45, 0.6], 0.3); q(x + r * 0.2, y + r * 0.05, w * 0.5, r * 0.12 * k, [1, 1, 1], 0.55 * k); break;
       case 'bubble': q(x, y, w * 0.9, r * 0.22 * k, [0.4, 0.5, 0.7], 0.16); q(x + r * 0.15, y, w * 0.35, r * 0.08 * k, [1, 1, 1], 0.4 * k); break;
       case 'mercury': q(x, y, w * 1.0, r * 0.26 * k, [0.15, 0.12, 0.2], 0.55); break;
@@ -1395,7 +1421,7 @@ class Sprite {
   }
 }
 function activeCount() { let n = 0; for (const s of sprites) if (!s.dead && !s.isLetter && s.visible()) n++; return n; }
-function visibleCount() { let n = 0; for (const s of sprites) if (!s.dead && s.visible()) n++; return n; }
+function visibleCount() { let n = 0; for (const s of sprites) if (!s.dead && (s.visible() || s.state === 'caught')) n++; return n; }
 function burstSand(x, y, r) { const g = toGrid(x, y); stamp(g[0], g[1], 0, 0, r / cellPx() * 0.8, 0.045, 0, null, 0); grains(x, y, 22, sandColorAt(x, y), 1.1); ringP(x, y, r * 1.6); }
 function randSpot() {
   let best = null, bd = -1;
@@ -1414,7 +1440,7 @@ function spawnAt(x, y, mat) {
 function spawnPeek() { if (!slotFree.length) return; const pos = randSpot(); const s = new Sprite(pos.x, pos.y, { state: 'peek' }); s.peekDur = rand(8, 13); s.walls(true); sprites.push(s); Snd.peep(); sparks(s.x, s.y - s.r * 0.5, 4, s.r * 0.6); }
 function hitSprite(x, y) {
   let best = null, bd = 1e9;
-  for (const s of sprites) { if (s.dead || s.popped || s.state === 'sink' || s.state === 'dive') continue;
+  for (const s of sprites) { if (s.dead || s.popped || s.state === 'sink' || s.state === 'dive' || s.state === 'caught') continue;
     if (s.isLetter) { const d = s.hit(x, y); if (d >= 0 && d * s.gh < bd) { bd = d * s.gh; best = s; } continue; }
     let cy = s.cy, rr = s.r * 1.25; if (s.state === 'peek') { cy = s.y - s.r * 0.55; rr = s.r * 1.35; } if (s.pile) { cy = s.y - s.r * 0.3; rr = s.r * 1.4; }
     const d = hyp(x - s.x, (y - cy) * 0.95); if (d < rr && d < bd) { bd = d; best = s; } }
@@ -1618,6 +1644,7 @@ class LetterFriend extends Sprite {
         const sp = hyp(this.vx, this.vy); this.wob = Math.min(1, this.wob + sp * 0.0004);
         if (sp > 20) { const a2 = toGrid(ox, oy), b2 = toGrid(this.x, this.y); plow(a2[0], a2[1], b2[0], b2[1], this.gh * 0.12 / cellPx(), 0.008, 0.4, this.col, 0.2); } break; }
       case 'idle': case 'fly': if (this.age > this.life) this.age = 0; this.physics(dt); break;
+      case 'caught': followCage(this, dt); break;
     }
     const svy = ((this.y - this.z) - this.lastY) / dt, dvy = svy - this.lastVy; if (Math.abs(dvy) > 150) this.sqv -= clamp(dvy * 0.004, -5, 5);
     this.lastVx = (this.x - this.lastX) / dt; this.lastVy = svy; this.lastX = this.x; this.lastY = this.y - this.z;
@@ -1968,6 +1995,50 @@ function tryMerge(h, o) {
   }
   return false;
 }
+// rainbow: touching another sprite while dragging gives it a new colour (each touch a different one)
+const PAINT = { jelly: [0.75, 0.45, 0.62], slime: [0.75, 0.48, 0.62], butter: [0.7, 0.66, 0.78], marsh: [0.6, 0.8, 0.88], ice: [0.6, 0.75, 0.85], sand: [0.55, 0.66, 0.8], bubble: [0.7, 0.75, 0.85], mercury: [0.5, 0.7, 0.85] };
+function recolor(rb, o) {
+  if (o.dead || o.popped || o.mat === 'rainbow' || o.state === 'caught' || (o.paintT || 0) > T) return false;
+  const lim = PAINT[o.mat] || PAINT.jelly, h0 = rgb2hsl(o.cols[0][0], o.cols[0][1], o.cols[0][2])[0];
+  let h = rb.hue || 0; const dd = Math.abs(((h - h0 + 1.5) % 1) - 0.5); if (dd < 0.12) h = (h + 0.3) % 1;
+  const dh = h - h0;
+  o.cols = o.cols.map(c => { const [hh, ss, ll] = rgb2hsl(c[0], c[1], c[2]); return hsl2rgb(((hh + dh) % 1 + 1) % 1, Math.max(ss, lim[0]), clamp(ll, lim[1], lim[2])); });
+  o.col = o.cols.length > 1 ? o.cols.reduce((a, c) => [a[0] + c[0] / o.cols.length, a[1] + c[1] / o.cols.length, a[2] + c[2] / o.cols.length], [0, 0, 0]) : o.cols[0];
+  o.paintT = T + 0.8; o.mood = 'surprised'; o.moodT = 0.5; o.arms(1);
+  setTimeout(() => { if (!o.dead) { o.mood = 'giggle'; o.moodT = 1; } }, 350);
+  if (o.isLetter) { o.wob = 0.8; o.sqv += 2; } else o.impulse(0, -160);
+  const cx = o.x, cy = visCY(o); Snd.chimes([1318.5, 1568, 2093, 2637], 0.045, 0.08); if (thr('rbg', 900)) o.giggle(0.7, 0, 0.15);
+  for (let i = 0; i < 7; i++) addP({ t: 'r', x: cx, y: cy, s: (o.isLetter ? o.gh * 0.5 : o.r) * (0.9 + i * 0.12), max: 0.5 + i * 0.05, col: css(hsl2rgb((h + i / 7) % 1, 0.9, 0.65)) });
+  for (let i = 0; i < 10; i++) sparks(cx, cy, 1, o.r, css(hsl2rgb(Math.random(), 0.9, 0.72)));
+  return true;
+}
+// bubble: drag it onto a sprite (or a sprite into it) and it closes around it; tap the bubble to pop it free
+const visCY = s => s.isLetter ? s.y - s.z - s.gh * 0.5 * s.grow : s.cy;
+function catchIn(bub, o) {
+  if (bub.captive || bub.popped || bub.dead || bub.state === 'dive' || bub.state === 'sink') return false;
+  if (o.dead || o.popped || o.mat === 'bubble' || o.castle || o === Trace.guide || o.state === 'caught' || o.state === 'peek' || o.state === 'emerge' || o.state === 'dive' || o.state === 'sink') return false;
+  for (const p of ptrs.values()) if (p.s === o) { p.mode = 'none'; p.s = null; }
+  if (o.pressing) o.endPress(false); if (o.state === 'walk') o.endWalk(false);
+  o.ptr = null; o.state = 'caught'; o.cage = bub; bub.captive = o; o.vx = o.vy = o.vz = 0;
+  const size = o.isLetter ? Math.max(0.5, o.mesh.w * 0.5) * o.gh * o.grow : o.r;
+  bub.rHome = bub.rHome || bub.r; bub.setRadius(Math.min(Math.max(bub.r, size * 1.4), baseR * 2.4)); bub.walls(true); bub.impulse(0, -120);
+  Snd.bubbles(5, 0.9, true); Snd.bloop(); bub.giggle(0.7, 0, 0.1); o.mood = 'surprised'; o.moodT = 0.9;
+  sparks(bub.x, bub.cy, 10, bub.r); bubblesP(bub.x, bub.cy, 6);
+  return true;
+}
+function followCage(s, dt) {
+  const b = s.cage; if (!b || b.dead || b.popped || b.captive !== s || b.state === 'dive' || b.state === 'sink') { releaseCaptive(s, b); return; }
+  const k = 1 - Math.exp(-dt * 9), ox = s.x, oy = s.y, bob = Math.sin(T * 2.2 + s.phase) * b.r * 0.05;
+  s.z += (b.z + 4 - s.z) * Math.min(1, dt * 6); s.vz = 0;
+  s.x += (b.x - s.x) * k; s.y += (b.cy + bob - visCY(s)) * k; s.vx = (s.x - ox) / dt; s.vy = (s.y - oy) / dt;
+  if (s.mood === 'happy' && Math.random() < dt * 0.25) { s.mood = 'giggle'; s.moodT = 0.8; }
+}
+function releaseCaptive(c, b) {
+  if (b && b.captive === c) b.captive = null;
+  if (!c || c.dead || c.state !== 'caught') return;
+  c.cage = null; c.state = 'fly'; c.st = 0; c.bounces = 0; c.vx = (b ? b.vx * 0.3 : 0) + rand(-40, 40); c.vy = b ? b.vy * 0.3 : 0; c.vz = 160;
+  c.mood = 'giggle'; c.moodT = 1.4; c.arms(1.2); Snd.wheee(c.voice); sparks(c.x, visCY(c), 8, 20);
+}
 function butterSand(a, b) {
   const bu = a.mat === 'butter' ? a : b, sa = bu === a ? b : a, busy = s => s.dead || s.popped || s.isLetter || s.castle || s.state === 'peek' || s.state === 'emerge' || s.state === 'dive' || s.state === 'sink';
   if (busy(bu) || busy(sa)) return false;
@@ -2120,6 +2191,12 @@ function loop(now) {
     const a = sprites[i], b = sprites[j]; if (a.dead || b.dead || !a.visible() || !b.visible() || a.z > (a.M.hover ? 45 : 20) || b.z > (b.M.hover ? 45 : 20)) continue;
     const dx = b.x - a.x, dy = (b.y - a.y) * 1.4, d = hyp(dx, dy) || 1, md = (a.r + b.r) * 0.85;
     // same material + one of them held (or both, with two fingers): merge on a firm push, or after touching for a moment
+    if ((a.mat === 'rainbow') !== (b.mat === 'rainbow') && (a.state === 'held' || b.state === 'held') && d < md * 1.02) { const rb = a.mat === 'rainbow' ? a : b; recolor(rb, rb === a ? b : a); }
+    // bubble + any other sprite, one of them held: the bubble closes around the other
+    if ((a.mat === 'bubble') !== (b.mat === 'bubble') && (a.state === 'held' || b.state === 'held') && d < md * 1.04) {
+      const bub = a.mat === 'bubble' ? a : b, o = bub === a ? b : a;
+      if (o.touchBy !== bub || T - o.touchSeen > 0.1) { o.touchBy = bub; o.touchT = 0; } o.touchSeen = T; o.touchT += lastDt;
+      if ((d < md * 0.97 || o.touchT > 0.12) && catchIn(bub, o)) continue; }
     // butter + sand kneaded together make a slime
     const bs = (a.mat === 'butter' && b.mat === 'sand') || (a.mat === 'sand' && b.mat === 'butter');
     if ((a.mat === b.mat || bs) && (a.state === 'held' || b.state === 'held') && d < md * 1.04) {
