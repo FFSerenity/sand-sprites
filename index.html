@@ -32,42 +32,46 @@ body{position:fixed;inset:0}
   box-shadow:0 5px 0 rgba(0,0,0,.22),0 9px 18px rgba(0,0,0,.28),inset 0 -5px 0 rgba(0,0,0,.12),inset 0 0 0 2px rgba(255,255,255,.35);
   transition:transform .12s, filter .2s}
 .btn.press{transform:translateY(4px) scale(.93)}
-.btn .lbl{position:absolute;bottom:calc(-1.5em);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:13px;font-weight:800;letter-spacing:.4px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7)}
-#tools{position:fixed;display:flex;gap:18px;--b:clamp(58px,9.5vmin,86px)}
-#parent{position:fixed;display:flex;gap:10px;--b:44px}
-#parent .btn{font-size:22px;--c:linear-gradient(180deg,#b9a2f5,#7d5fd6)}
+.btn .lbl{position:absolute;bottom:calc(-1.5em);left:50%;transform:translateX(-50%);white-space:nowrap;font-size:clamp(10.5px,1.6vmin,13px);font-weight:800;letter-spacing:.4px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+#tools{position:fixed;display:flex;gap:clamp(10px,2.2vmin,18px);--b:clamp(46px,9.5vmin,86px)}
+#parent{position:fixed;display:flex;gap:10px;--b:clamp(36px,5.4vmin,44px)}
+#parent .btn{font-size:calc(var(--b)*.5);--c:linear-gradient(180deg,#b9a2f5,#7d5fd6)}
 #parent .btn.off{filter:grayscale(1) brightness(.8);opacity:.75}
-#palette{position:fixed;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:clamp(6px,1.2vmin,11px);padding:12px 9px;border-radius:999px;background:rgba(70,35,90,.32);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25),0 6px 16px rgba(0,0,0,.2);--d:clamp(36px,6.3vmin,56px)}
+#palette{position:fixed;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:clamp(6px,1.2vmin,11px);padding:12px 9px;border-radius:999px;background:rgba(70,35,90,.32);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25),0 6px 16px rgba(0,0,0,.2);--d:clamp(30px,6.3vmin,56px)}
+#palette.row{top:auto;transform:none;flex-direction:row;padding:7px 10px;--d:28px;gap:6px}
 .dot{width:var(--d);height:var(--d);border-radius:50%;border:3px solid rgba(255,255,255,.9);padding:0;font-size:calc(var(--d)*.5);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.18),inset 0 -4px 0 rgba(0,0,0,.12);transition:transform .15s, box-shadow .15s}
 .dot.sel{transform:scale(1.2);box-shadow:0 0 0 4px rgba(255,255,255,.95),0 0 22px rgba(255,255,255,.9)}
-#count{position:fixed;display:flex;align-items:center;gap:8px;padding:8px 18px 8px 10px;border-radius:999px;background:rgba(70,35,90,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-weight:800;font-size:clamp(16px,2.6vmin,22px);letter-spacing:.3px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);pointer-events:none}
+#count{position:fixed;display:flex;align-items:center;gap:8px;padding:8px 18px 8px 10px;border-radius:999px;background:rgba(70,35,90,.5);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;font-weight:800;font-size:clamp(14px,2.6vmin,22px);letter-spacing:.3px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);pointer-events:none}
+#topLeft #count{position:static}
+#topLeft #bBook{order:-1}
 #count .ic{display:inline-flex;width:1.6em;height:1.6em;border-radius:50%;align-items:center;justify-content:center;background:linear-gradient(180deg,#ffe27a,#ffb23f);font-size:.85em}
 #count.bump,.btn.bump{animation:bump .5s}
 #topLeft{position:fixed;display:flex;align-items:center;gap:10px}
-#bBook{--b:50px;font-size:26px;--c:linear-gradient(180deg,#ffe08a,#ffb23f)}
+#bBook{--b:clamp(40px,6.1vmin,50px);font-size:calc(var(--b)*.52);--c:linear-gradient(180deg,#ffe08a,#ffb23f)}
 #bBook .badge{position:absolute;right:-7px;top:-7px;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:#ff4d6d;color:#fff;font-size:13px;font-weight:900;display:none;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.3)}
-#bTraceX{position:fixed;left:50%;margin-left:-27px;--b:54px;font-size:24px;--c:linear-gradient(180deg,#ffa3b1,#ff5d73);display:none}
+#bTraceX{position:fixed;left:50%;--b:clamp(42px,6.6vmin,54px);margin-left:calc(var(--b)/-2);font-size:calc(var(--b)*.44);--c:linear-gradient(180deg,#ffa3b1,#ff5d73);display:none}
 #bTraceX.show{display:flex}
 #book{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(30,15,45,.55);z-index:6}
 #book.open{display:flex}
-#book .panel{position:relative;background:linear-gradient(180deg,#fff8ec,#ffe8c4);border-radius:30px;padding:20px 22px 24px;box-shadow:0 20px 50px rgba(0,0,0,.4);width:min(94vw,920px);max-height:90vh;overflow:auto}
-#book h2{margin:0 0 14px;text-align:center;font-size:clamp(24px,4.2vmin,40px);font-weight:900;color:#7b44b0}
-#book .grid{display:grid;grid-template-columns:repeat(9,1fr);gap:clamp(6px,1.2vmin,12px)}
-#book .tile{position:relative;aspect-ratio:1;border:none;border-radius:20px;font-family:inherit;font-weight:900;font-size:clamp(26px,5.4vmin,50px);color:#cdbba8;background:#fff;box-shadow:inset 0 0 0 3px #ecdcc8;cursor:pointer;transition:transform .12s;padding:0}
+#book .panel{position:relative;background:linear-gradient(180deg,#fff8ec,#ffe8c4);border-radius:clamp(20px,3.6vmin,30px);padding:clamp(12px,2.4vmin,20px) clamp(12px,2.7vmin,22px) clamp(14px,2.9vmin,24px);box-shadow:0 20px 50px rgba(0,0,0,.4);width:min(94vw,920px);max-height:90vh;overflow:auto}
+#book h2{margin:0 0 clamp(8px,1.7vmin,14px);padding:0 40px;text-align:center;font-size:clamp(20px,4.2vmin,40px);font-weight:900;color:#7b44b0}
+#book .grid{display:grid;grid-template-columns:repeat(9,1fr);gap:clamp(6px,1.2vmin,12px);justify-content:center}
+#book .tile{position:relative;aspect-ratio:1;border:none;border-radius:22%;font-family:inherit;font-weight:900;font-size:clamp(26px,5.4vmin,50px);color:#cdbba8;background:#fff;box-shadow:inset 0 0 0 3px #ecdcc8;cursor:pointer;transition:transform .12s;padding:0}
 #book .tile.got{color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.4),rgba(255,255,255,0) 50%),var(--tc);box-shadow:0 4px 0 rgba(0,0,0,.15),inset 0 -4px 0 rgba(0,0,0,.12);text-shadow:0 2px 0 rgba(0,0,0,.2)}
 #book .tile.press{transform:scale(.92)}
 #book .tile .stars{position:absolute;bottom:3px;left:0;right:0;font-size:clamp(8px,1.4vmin,12px);letter-spacing:-1px;text-shadow:none}
-#book .collect{display:flex;align-items:center;gap:8px;margin:-4px auto 16px;border:none;border-radius:999px;padding:10px 22px;font-family:inherit;font-weight:900;font-size:clamp(17px,2.8vmin,26px);color:#fff;background:linear-gradient(180deg,#ffd36b,#ff9f1c);box-shadow:0 5px 0 #d9771a,0 10px 18px rgba(0,0,0,.18);cursor:pointer;touch-action:manipulation}
+#book .collect{display:flex;flex-wrap:wrap;justify-content:center;max-width:100%;align-items:center;gap:6px 8px;margin:-4px auto clamp(10px,2vmin,16px);border:none;border-radius:999px;padding:10px 22px;font-family:inherit;font-weight:900;font-size:clamp(15px,2.8vmin,26px);color:#fff;background:linear-gradient(180deg,#ffd36b,#ff9f1c);box-shadow:0 5px 0 #d9771a,0 10px 18px rgba(0,0,0,.18);cursor:pointer;touch-action:manipulation}
 #book .collect .chip{display:inline-flex;align-items:center;justify-content:center;min-width:1.5em;height:1.5em;padding:0 .2em;border-radius:.5em;background:var(--tc);font-size:.8em;box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
 #book .collect:disabled{background:#efe3d2;box-shadow:none;color:#b9a892;cursor:default}
 #book .collect.press{transform:translateY(4px);box-shadow:0 1px 0 #d9771a}
 #book .tile.new{animation:tilePop .8s ease-out}
 @keyframes tilePop{0%{transform:scale(1)}35%{transform:scale(1.28) rotate(-6deg)}70%{transform:scale(.95)}100%{transform:scale(1)}}
-#book .close{position:absolute;right:14px;top:14px;--b:44px;font-size:20px;--c:linear-gradient(180deg,#ffa3b1,#ff5d73)}
+#book .close{position:absolute;right:clamp(8px,1.7vmin,14px);top:clamp(8px,1.7vmin,14px);--b:clamp(34px,5.4vmin,44px);font-size:calc(var(--b)*.45);--c:linear-gradient(180deg,#ffa3b1,#ff5d73)}
 @keyframes bump{40%{transform:scale(1.18)}}
-#picker{position:fixed;display:grid;grid-template-columns:repeat(3,var(--m));gap:30px 14px;padding:14px 16px 32px;border-radius:30px;background:rgba(60,30,85,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.35);--m:clamp(56px,9vmin,82px);
+#picker{position:fixed;display:grid;grid-template-columns:repeat(3,var(--m));gap:clamp(22px,3.6vmin,30px) 18px;padding:14px 16px 32px;border-radius:30px;background:rgba(60,30,85,.62);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 2px rgba(255,255,255,.3),0 10px 30px rgba(0,0,0,.35);--m:clamp(46px,9vmin,82px);
   transform-origin:100% 100%;transform:scale(.4);opacity:0;pointer-events:none;transition:transform .22s cubic-bezier(.3,1.6,.5,1),opacity .15s}
 #picker.open{transform:scale(1);opacity:1;pointer-events:auto}
+#picker.wide{grid-template-columns:repeat(5,var(--m))}
 .mbtn{--b:var(--m)}
 #start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(60,25,90,.25),rgba(40,15,50,.6));transition:opacity .5s;z-index:5}
 #start.hide{opacity:0;pointer-events:none}
@@ -158,7 +162,7 @@ function baseH(u, v, sd) { return 0.5 + 0.06 * Math.sin(u * 11 + v * 3 + sd * 7)
 
 // ---------- layout ----------
 const frame = $('#frame'), trayEl = $('#tray'), glc = $('#gl'), fx = $('#fx'), ctx = fx.getContext('2d');
-let W = 0, H = 0, F = 0, TX = 0, TY = 0, TW = 0, TH = 0, baseR = 40;
+let W = 0, H = 0, F = 0, TX = 0, TY = 0, TW = 0, TH = 0, baseR = 40, narrowUI = false;
 function safeInsets() { const cs = getComputedStyle($('#probe')); return { t: parseFloat(cs.paddingTop) || 0, r: parseFloat(cs.paddingRight) || 0, b: parseFloat(cs.paddingBottom) || 0, l: parseFloat(cs.paddingLeft) || 0 }; }
 function sizeCanvases() { for (const c of [glc, fx]) { c.width = Math.round(W * RS); c.height = Math.round(H * RS); c.style.width = W + 'px'; c.style.height = H + 'px'; } }
 function setQuality(l) {
@@ -173,12 +177,18 @@ function layout() {
   TX = Math.max(F, si.l); TY = Math.max(F, si.t); TW = W - TX - Math.max(F, si.r); TH = H - TY - Math.max(F, si.b);
   Object.assign(trayEl.style, { left: TX + 'px', top: TY + 'px', width: TW + 'px', height: TH + 'px' });
   sizeCanvases();
-  baseR = clamp(Math.min(TW, TH) * 0.056, 27, 55);
+  baseR = clamp(Math.min(TW, TH) * 0.056, 20, 55);
   const pad = 14, R_ = W - TX - TW, B_ = H - TY - TH;
   $('#tools').style.right = (R_ + pad + 4) + 'px'; $('#tools').style.bottom = (B_ + pad + 22) + 'px';
   $('#picker').style.right = (R_ + pad) + 'px'; $('#picker').style.bottom = (B_ + pad + 22 + 110) + 'px';
   $('#parent').style.right = (R_ + pad) + 'px'; $('#parent').style.top = (TY + pad) + 'px';
-  $('#palette').style.left = (TX + pad) + 'px';
+  // short landscape screens (phones on their side): colours become a row along the bottom, the picker goes 5 x 2
+  const shortL = W > H && H < 500, palEl = $('#palette');
+  palEl.classList.toggle('row', shortL); palEl.style.left = (TX + pad) + 'px'; palEl.style.bottom = shortL ? (B_ + pad) + 'px' : '';
+  $('#picker').classList.toggle('wide', shortL);
+  { const tr = $('#tools').getBoundingClientRect(); if (tr.height) $('#picker').style.bottom = (H - tr.top + 14) + 'px'; }
+  narrowUI = W < 560; if (typeof lastCount !== 'undefined') lastCount = -1;
+  if (typeof bookOpen !== 'undefined' && bookOpen) fitBook();
   $('#topLeft').style.left = (TX + pad) + 'px'; $('#topLeft').style.top = (TY + pad) + 'px'; $('#bTraceX').style.top = (TY + pad) + 'px';
   if (oTW > 0) for (const s of sprites) { s.x = TX + (s.x - oTX) / oTW * TW; s.y = TY + (s.y - oTY) / oTH * TH; s.resetInertia(); }
   setupSim();
@@ -1942,9 +1952,22 @@ function openBook(hl = []) {
   bc.disabled = !pend.length;
   bc.innerHTML = pend.length ? `✨ Collect ${pend.slice(0, 14).map(s => `<span class="chip" style="--tc:${css(s.col)}">${s.id}</span>`).join('')}` : 'Write letters to collect ✨';
   $('#bookTitle').textContent = `My ABC & 123  ⭐ ${Book.total()}`;
-  bookEl.classList.add('open'); bookOpen = true; Snd.chimes([784, 1046.5], 0.08, 0.08);
+  bookEl.classList.add('open'); bookOpen = true; fitBook(); Snd.chimes([784, 1046.5], 0.08, 0.08);
 }
 function closeBook() { bookEl.classList.remove('open'); bookOpen = false; }
+// choose the number of columns that gives the biggest tiles while the whole book fits on screen
+function fitBook() {
+  const panel = bookEl.querySelector('.panel'), grid = $('#bookGrid'), cs = getComputedStyle(panel), gap = parseFloat(getComputedStyle(grid).columnGap) || 8;
+  const pw = Math.min(innerWidth * 0.94, 920), aw = pw - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  panel.style.width = pw + 'px'; grid.style.gridTemplateColumns = 'repeat(9,1fr)';
+  const ah = innerHeight * 0.92 - grid.offsetTop - parseFloat(cs.paddingBottom) - 4, n = GLYPH_IDS.length;
+  let best = null;
+  for (const cols of [9, 12, 7, 6, 5]) { const rows = Math.ceil(n / cols), t = Math.min(100, (aw - gap * (cols - 1)) / cols, (ah - gap * (rows - 1)) / rows);
+    if (!best || t > best.t * (best.cols === 9 ? 1.12 : 1)) best = { cols, t }; }
+  const t = Math.max(26, Math.floor(best.t));
+  grid.style.gridTemplateColumns = `repeat(${best.cols}, ${t}px)`;
+  for (const b of grid.children) { b.style.fontSize = Math.round(t * 0.55) + 'px'; const st = b.querySelector('.stars'); if (st) st.style.fontSize = Math.max(8, Math.round(t * 0.14)) + 'px'; }
+}
 
 function detach(s) { for (const p of ptrs.values()) if (p.s === s) { p.mode = 'none'; p.s = null; } if (s.state === 'walk') s.endWalk(false); s.ptr = null; s.pressing = false; }
 function flyToBook(s, group = null) {
@@ -2287,7 +2310,7 @@ function loop(now) {
   updateParticles(dt); if (pf) mark('partUpd'); relax(); if (pf) mark('relax');
   night += (nightTarget - night) * Math.min(1, dt * 2.2);
   renderGL(); if (pf) mark('gl'); drawFx(); if (pf) { mark('fx'); PROF.n++; }
-  const n = visibleCount(); if (n !== lastCount) { if (n > lastCount && lastCount >= 0) { const el = $('#count'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } lastCount = n; countEl.textContent = 'Sand Sprites: ' + n; }
+  const n = visibleCount(); if (n !== lastCount) { if (n > lastCount && lastCount >= 0) { const el = $('#count'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } lastCount = n; countEl.textContent = narrowUI ? String(n) : 'Sand Sprites: ' + n; }
 }
 
 // ---------- boot ----------
