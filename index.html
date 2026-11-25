@@ -706,7 +706,9 @@ function upProps(i) { const im = PIMG[i], t = i ? glTexE : glTexP; if (!gl || !t
   gl.activeTexture(gl.TEXTURE6 + i); gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, !i);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); }
-PIMG.forEach((im, i) => { im.onload = () => { propsReady++; upProps(i); }; im.src = i ? 'beach/props_e.png' : 'beach/props.webp'; });
+// bump PROPS_V whenever the props pictures change: a new address can't be served stale from a cache next to a newer page
+const PROPS_V = 4;
+PIMG.forEach((im, i) => { im.onload = () => { propsReady++; upProps(i); }; im.src = (i ? 'beach/props_e.png' : 'beach/props.webp') + '?v=' + PROPS_V; });
 // snapshot of the sand (colour + height) taken on arriving at the beach: afterwards only changes since then are drawn over the picture
 let snapA8 = null, snapW = 0, snapH = 0;
 function takeSnap() { fillTex(); snapA8 = texA8.slice(); snapW = GW; snapH = GH; upSnap(); }
