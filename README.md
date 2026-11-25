@@ -16,7 +16,7 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 
 ## Learning: write numbers and letters
 - Tap **✏️ Write**, tap a **magic star** that sometimes falls into the sand, or pick a tile in the **📖 book**.
-- The numbers 1–9 and the letters A–Z are traced one stroke at a time, in the order taught at school: a green star marks where to start, arrows show the direction, and a sprite walks each stroke first, then follows her finger.
+- The numbers 1–9 and the letters A–Z are traced one stroke at a time, in the order taught at school: a little glowing star waits where each stroke starts (with its number) and then stays just ahead of her finger, so if she slips off the path it shows where to carry on (it calls with rings while she's off); what she has traced glows gold; arrows show the direction, and a sprite walks each stroke first, then follows her finger.
 - Finishing a stroke plays a chime and the helper sprite cheers. Finishing the whole character reads it aloud in English ("Bee! Bee is for Bear!" with 🐻, or counts "One, two, three!" for numbers), praises her, and **the camera tilts down to the beach**.
 
 ## The beach

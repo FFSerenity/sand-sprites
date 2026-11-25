@@ -289,7 +289,7 @@ function whirlStamp(cx, cy, R, ang, pull, sink) {
 }
 let simFrame = 0;
 function relax() {
-  simFrame++; const T_ = 0.016, K = 0.22;
+  simFrame++; const T_ = 0.026, K = 0.22;
   for (let y = 0; y < GH; y++) { let i = y * GW; for (let x = 0; x < GW - 1; x++, i++) { const df = hA[i] - hA[i + 1];
     if (df > T_) { const m = (df - T_) * K; hA[i] -= m; hA[i + 1] += m; } else if (df < -T_) { const m = (-df - T_) * K; hA[i] += m; hA[i + 1] -= m; } } }
   for (let y = 0; y < GH - 1; y++) { let i = y * GW; for (let x = 0; x < GW; x++, i++) { const j = i + GW, df = hA[i] - hA[j];
@@ -298,12 +298,13 @@ function relax() {
   const N = GW * GH; for (let i = 0; i < N; i++) dA[i] *= 0.982;
 }
 function fillTex() {
-  const HS = 6.5, L = 0.95 * 0.95;
+  const HS = 8.0, L = 0.95 * 0.95;
   for (let y = 0; y < GH; y++) { const yu = y > 0 ? -GW : 0, yd = y < GH - 1 ? GW : 0; let i = y * GW, o = i * 4;
     for (let x = 0; x < GW; x++, i++, o += 4) {
       let nx = (hA[x > 0 ? i - 1 : i] - hA[x < GW - 1 ? i + 1 : i]) * HS, ny = (hA[i + yu] - hA[i + yd]) * HS; const n2 = nx * nx + ny * ny; if (n2 > L) { const f = 0.95 / Math.sqrt(n2); nx *= f; ny *= f; }
       texA[o] = rA[i] * 255; texA[o + 1] = gA[i] * 255; texA[o + 2] = bA[i] * 255; texA[o + 3] = hA[i] * 255;
-      texB[o] = nx * 127.5 + 127.5; texB[o + 1] = ny * 127.5 + 127.5; texB[o + 2] = dA[i] * 255; texB[o + 3] = 255;
+      const cv = (hA[x > 0 ? i - 1 : i] + hA[x < GW - 1 ? i + 1 : i] + hA[i + yu] + hA[i + yd]) * 0.25 - hA[i];
+      texB[o] = nx * 127.5 + 127.5; texB[o + 1] = ny * 127.5 + 127.5; texB[o + 2] = dA[i] * 255; texB[o + 3] = 127.5 + cv * 2600;
     } }
 }
 
@@ -373,10 +374,11 @@ vec3 sandAt(vec2 cssP){
   vec4 A = texture2D(uA, uv); vec4 B = texture2D(uB, uv);
   vec2 g = floor(cssP * uDpr / uPx);
   float n1=hash(g), n2=hash(g+17.31), n3=hash(g+71.7);
-  vec3 N=normalize(vec3((B.rg*2.-1.)*1.7+(vec2(n1,n2)-.5)*.32,1.));
+  vec3 N=normalize(vec3((B.rg*2.-1.)*2.0+(vec2(n1,n2)-.5)*.32,1.));
   float diff=max(dot(N,LIGHT),0.);
   vec3 base=A.rgb;
-  vec3 col=base*(.40+.78*diff)*(.80+.34*A.a);
+  float cv=B.a*2.-1.;   // >0: the bottom of a furrow, <0: the crest of a ridge
+  vec3 col=base*(.34+.86*diff)*(.74+.52*A.a)*(1.-.32*max(cv,0.)+.10*max(-cv,0.));
   col*=.93+.14*n1;
   col+=pow(max(dot(reflect(-LIGHT,N),vec3(0.,0.,1.)),0.),18.)*.12;
   float tw=step(.986,n3)*pow(max(0.,sin(uTime*(1.4+n1*2.2)+n2*60.)),14.);
@@ -2353,7 +2355,7 @@ function startTrace(id) {
   if (Trace.active) endTrace(false);
   closePicker(); closeBook();
   const g = GLYPHS[id], L = glyphLayout(g);
-  Object.assign(Trace, { active: true, id, g, L, si: -1, phase: 'intro', rt: 0, events: [], tol: Math.max(36, L.gh * 0.1), guide: null, flash: 0, lastTick: 0,
+  Object.assign(Trace, { mk: null, lost: 0, active: true, id, g, L, si: -1, phase: 'intro', rt: 0, events: [], tol: Math.max(36, L.gh * 0.1), guide: null, flash: 0, lastTick: 0,
     strokes: g.s.map(st => ({ pts: screenStroke(st, L, 12), maxLit: -1, litN: 0, done: false, lit: [] })) });
   ttx.classList.add('show'); traceCount++;
   for (const s of sprites) if (s.state === 'peek') { s.state = 'sink'; s.st = 0; }
@@ -2475,22 +2477,52 @@ function drawTrace(c) {
       c.globalCompositeOperation = 'source-over'; polyline(c, pts); const gr = c.createLinearGradient(pts[0].x, pts[0].y - 20, pts[0].x, pts[0].y + 20); gr.addColorStop(0, '#fff2b3'); gr.addColorStop(1, '#ffbf3f');
       c.strokeStyle = gr; c.globalAlpha = fade; c.lineWidth = tol * 0.36; c.stroke(); c.globalAlpha = 1; return; }
     if (k === Trace.si && Trace.phase === 'trace') {
-      c.fillStyle = '#ffd34d'; c.beginPath(); for (const p of pts) if (p.lit) { c.moveTo(p.x + 6, p.y); c.arc(p.x, p.y, 6, 0, TAU); } c.fill();
+      const ml = st.maxLit;
+      // what she has traced: a warm glowing ribbon with sparkles running along it
+      if (ml > 0) { const lit = pts.slice(0, ml + 1);
+        c.globalCompositeOperation = 'lighter'; polyline(c, lit); c.strokeStyle = 'rgba(255,196,90,0.32)'; c.lineWidth = tol * 0.78; c.stroke();
+        polyline(c, lit); c.strokeStyle = 'rgba(255,226,140,0.35)'; c.lineWidth = tol * 0.5; c.stroke();
+        c.globalCompositeOperation = 'source-over'; polyline(c, lit); c.strokeStyle = '#ffc94a'; c.lineWidth = tol * 0.3; c.stroke();
+        polyline(c, lit); c.strokeStyle = 'rgba(255,250,220,0.9)'; c.lineWidth = tol * 0.11; c.stroke();
+        c.globalCompositeOperation = 'lighter';
+        for (let j = 0; j < 3; j++) { const q = lit[Math.floor(((T * 0.55 + j / 3) % 1) * (lit.length - 1))]; c.fillStyle = 'rgba(255,255,235,0.85)'; starPath(c, q.x, q.y, tol * 0.16, T * 2 + j); c.fill(); }
+        for (let i = 2; i < lit.length; i += 5) { const f = Math.max(0, Math.sin(T * 3.1 + i * 1.7)); if (f < 0.7) continue; c.fillStyle = `rgba(255,255,240,${((f - 0.7) * 2.5).toFixed(2)})`; starPath(c, lit[i].x, lit[i].y, tol * 0.1, i); c.fill(); }
+        c.globalCompositeOperation = 'source-over'; }
       twinkleDots(c, pts, 3.4, i => 0.45 + 0.4 * (0.55 + 0.45 * Math.sin(T * 5 + i * 0.5)), '255,255,255');
       // direction arrows
-      c.strokeStyle = 'rgba(255,255,255,0.75)'; c.lineWidth = 3;
-      for (let i = Math.max(4, st.maxLit + 4); i < pts.length - 2; i += 7) { const a = pts[i - 1], b = pts[i + 1], an = Math.atan2(b.y - a.y, b.x - a.x), p = pts[i], s = 9;
+      c.strokeStyle = 'rgba(255,255,255,0.6)'; c.lineWidth = 3;
+      for (let i = Math.max(4, ml + 6); i < pts.length - 2; i += 7) { const a = pts[i - 1], b = pts[i + 1], an = Math.atan2(b.y - a.y, b.x - a.x), p = pts[i], s = 9;
         c.beginPath(); c.moveTo(p.x - Math.cos(an - 0.6) * s, p.y - Math.sin(an - 0.6) * s); c.lineTo(p.x, p.y); c.lineTo(p.x - Math.cos(an + 0.6) * s, p.y - Math.sin(an + 0.6) * s); c.stroke(); }
       // comet showing the way
-      if (st.maxLit < 0) { const f = (T * 0.7) % 1.3, hi = Math.min(pts.length - 1, Math.floor(f * pts.length)); if (f < 1) { c.globalCompositeOperation = 'lighter';
+      if (ml < 0) { const f = (T * 0.7) % 1.3, hi = Math.min(pts.length - 1, Math.floor(f * pts.length)); if (f < 1) { c.globalCompositeOperation = 'lighter';
         for (let j = 0; j < 8; j++) { const q = pts[Math.max(0, hi - j)]; c.fillStyle = `rgba(255,240,170,${0.6 * (1 - j / 8)})`; c.beginPath(); c.arc(q.x, q.y, 8 - j * 0.6, 0, TAU); c.fill(); } c.globalCompositeOperation = 'source-over'; } }
-      // start star with stroke number
-      const s0 = pts[Math.max(0, st.maxLit)], pr = tol * 0.55 * (1 + 0.12 * Math.sin(T * 6));
-      if (st.maxLit < 0) { c.fillStyle = 'rgba(60,200,120,0.9)'; c.beginPath(); c.arc(s0.x, s0.y, pr, 0, TAU); c.fill(); c.fillStyle = '#fff'; starPath(c, s0.x, s0.y, pr * 0.62, T); c.fill();
-        c.font = `900 ${Math.round(tol * 0.45)}px ui-rounded,system-ui,sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#2f9e5f'; c.fillText(String(k + 1), s0.x - pr * 1.25, s0.y - pr * 1.05); }
+      drawTraceMarker(c, st, k, tol);
     } else twinkleDots(c, pts, 3, i => 0.5 * (0.6 + 0.4 * Math.sin(T * 4 + i * 0.7)) * gi, '255,250,220');
   });
   c.restore();
+}
+
+// the little star that waits where she should go on: at the start of a stroke (with its number), then always just ahead of
+// what she has traced. It glides there, bobs, and calls with rings when her finger is off the path.
+function drawTraceMarker(c, st, k, tol) {
+  const pts = st.pts, ml = st.maxLit, fr = pts[Math.min(pts.length - 1, ml + 1)], dt = lastDt || 0.016;
+  if (!Trace.mk) Trace.mk = { x: fr.x, y: fr.y }; const m = Trace.mk, e = Math.min(1, dt * 12); m.x += (fr.x - m.x) * e; m.y += (fr.y - m.y) * e;
+  let off = false; for (const p of ptrs.values()) if (p.mode === 'sand' && hyp(p.x - fr.x, p.y - fr.y) > tol * 1.7) off = true;
+  Trace.lost = off ? Trace.lost + dt : Math.max(0, Trace.lost - dt * 3);
+  const lost = Math.min(1, Trace.lost / 0.3), bob = Math.sin(T * 3.2) * tol * 0.06 * (1 - lost), S = tol * (1.4 + 0.1 * Math.sin(T * 5) + 0.4 * lost);
+  const x = m.x, y = m.y - bob;
+  c.save(); c.globalCompositeOperation = 'lighter';
+  const hg = c.createRadialGradient(x, y, 0, x, y, S * 1.25); hg.addColorStop(0, `rgba(255,224,130,${0.55 + 0.25 * lost})`); hg.addColorStop(1, 'rgba(255,200,90,0)');
+  c.fillStyle = hg; c.beginPath(); c.arc(x, y, S * 1.25, 0, TAU); c.fill();
+  if (lost > 0) for (let j = 0; j < 2; j++) { const f = (T * 1.4 + j / 2) % 1; c.strokeStyle = `rgba(255,236,160,${(0.8 * (1 - f) * lost).toFixed(2)})`; c.lineWidth = 3; c.beginPath(); c.arc(x, y, S * (0.6 + f * 1.3), 0, TAU); c.stroke(); }
+  c.restore();
+  const im = PIMG[0], r = PATL.r.star;
+  if (im.complete && im.naturalWidth) { c.save(); c.translate(x, y); c.rotate(Math.sin(T * 2.3) * 0.14); c.drawImage(im, r[0], r[1], r[2], r[3], -S / 2, -S / 2 * r[3] / r[2], S, S * r[3] / r[2]); c.restore(); }
+  else { c.fillStyle = '#ffd34d'; starPath(c, x, y, S * 0.45, T); c.fill(); }
+  if (ml < 0) {   // which stroke this is
+    const bx = x - S * 0.55, by = y - S * 0.5, br = tol * 0.26;
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(bx, by, br, 0, TAU); c.fill(); c.strokeStyle = '#f0a92e'; c.lineWidth = 2.5; c.stroke();
+    c.font = `900 ${Math.round(br * 1.25)}px ui-rounded,system-ui,sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#b36a10'; c.fillText(String(k + 1), bx, by + 1); }
 }
 
 // ---------- magic star (falls into the sand now and then; tap it to write) ----------
@@ -2609,7 +2641,7 @@ function onMove(e) {
   { const te = e.timeStamp || t; p.sh.push({ x: p.sx, y: p.sy, t: te }); while (p.sh.length > 2 && te - p.sh[0].t > 90) p.sh.shift(); }
   if (!p.moved && hyp(p.sx - p.sx0, p.sy - p.sy0) > 12) p.moved = true;
   if (p.mode === 'sand') { const d = hyp(x - p.lx, y - p.ly);
-    if (d > 0.5) { if (Trace.active) traceMove(p.lx, p.ly, x, y); const a = toGrid(p.lx, p.ly), b = toGrid(x, y); plow(a[0], a[1], b[0], b[1], brushR(), 0.05, 0.9, paintColor(), 0.4); p.dist += d; p.lx = x; p.ly = y; if (Math.random() < d / 60) grains(x, y, 1, sandColorAt(x, y), 0.4); }
+    if (d > 0.5) { if (Trace.active) traceMove(p.lx, p.ly, x, y); const a = toGrid(p.lx, p.ly), b = toGrid(x, y); plow(a[0], a[1], b[0], b[1], brushR(), 0.08, 0.9, paintColor(), 0.4); p.dist += d; p.lx = x; p.ly = y; if (Math.random() < d / 60) grains(x, y, 1, sandColorAt(x, y), 0.4); }
     if (hyp(x - p.wx, y - p.wy) > 16) { p.wx = x; p.wy = y; p.still = 0; p.whirlDone = false; p.wstr = 0; }
     const lp = p.path[p.path.length - 1], pd = hyp(x - lp.x, y - lp.y); if (pd > 10 && p.path.length < 500) { p.path.push({ x, y }); p.plen += pd; } }
 }
