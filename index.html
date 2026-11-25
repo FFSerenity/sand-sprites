@@ -84,6 +84,9 @@ body{position:fixed;inset:0}
 #play{margin-top:18px;border:none;border-radius:999px;padding:.45em 1.3em;font-size:clamp(30px,6vmin,54px);font-weight:900;color:#fff;font-family:inherit;cursor:pointer;background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 50%),linear-gradient(180deg,#7fe3b0,#2fb67c);box-shadow:0 7px 0 #1e7c55,0 14px 28px rgba(0,0,0,.35);animation:pulse 1.4s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(-10px) rotate(-1.5deg)}}
 @keyframes pulse{50%{transform:scale(1.07)}}
+.btn.nope{animation:nope .42s}
+@keyframes nope{20%{transform:rotate(-10deg)}45%{transform:rotate(8deg)}70%{transform:rotate(-4deg)}}
+.btn.busy{filter:saturate(.5) brightness(.85)}
 #nogl{position:fixed;inset:0;display:none;align-items:center;justify-content:center;color:#fff;font-size:22px;text-align:center;padding:30px;background:#3a2414;z-index:9}
 #probe{position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 </style>
@@ -1684,7 +1687,7 @@ const vsrc = name => `beach/${name}${vidHevc ? '-hevc' : ''}.mp4`;
 const filmFrom = mode => mode === 'day' ? 'sunset' : 'sunrise';
 // how far up the sand the waves reach through each loop (fraction of the picture height, 8 samples a second), measured from the videos
 const FRONT = { day: [0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.72,0.7194,0.7194,0.7189,0.7167,0.7167,0.7167,0.7156,0.715,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.72,0.7194,0.7189,0.7194,0.7211,0.7222,0.7244,0.7272,0.7283,0.7306,0.7311,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7311,0.7306,0.7294,0.7267,0.7183,0.71,0.7133,0.7167,0.7189,0.7194,0.7194,0.7194,0.7178,0.7172,0.7194,0.7206,0.7217], night: [0.7194,0.7172,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7172,0.7189,0.72,0.7222,0.7244,0.7256,0.7283,0.7306,0.7317,0.7333,0.7356,0.7372,0.7389,0.7394,0.7417,0.7417,0.7417,0.7433,0.7444,0.7444,0.7444,0.7444,0.7444,0.7467,0.7472,0.7472,0.7456,0.7444,0.7444,0.7444,0.7444,0.7433,0.7417,0.7411,0.7394,0.7417,0.7417,0.7383,0.7306,0.7322,0.735,0.7339,0.7333,0.7333,0.7333,0.7322,0.7306,0.7283,0.7261,0.725,0.7206,0.7194,0.7211,0.7211,0.7222,0.7206,0.7217,0.7222,0.7222,0.7206] };
-const BVID = { el: [$('#bgv0'), $('#bgv1')], name: [null, null], ok: [false, false], cur: 0, state: 'off', mode: 'day', to: null, after: null, xf: 0, vis: 0, nightFrom: 0, failT: 0 };
+const BVID = { el: [$('#bgv0'), $('#bgv1')], name: [null, null], ok: [false, false], cur: 0, state: 'off', mode: 'day', to: null, xf: 0, vis: 0, nightFrom: 0, failT: 0 };
 BVID.el.forEach((v, i) => {
   v.addEventListener('playing', () => { BVID.ok[i] = true; });
   v.addEventListener('error', () => { BVID.ok[i] = false;
@@ -1697,16 +1700,16 @@ BVID.el.forEach((v, i) => {
 function vidSet(i, name, loop) { const v = BVID.el[i]; v.loop = loop; if (BVID.name[i] !== name) { BVID.name[i] = name; BVID.ok[i] = false; v.src = vsrc(name); } }
 function vidPlay(i, from0) { const v = BVID.el[i]; try { if (from0) v.currentTime = 0; } catch (e) {} const p = v.play(); if (p && p.catch) p.catch(() => {}); }
 function vidStart(mode) {
-  BVID.mode = mode; BVID.state = 'loop'; BVID.to = BVID.after = null; BVID.xf = 0;
+  BVID.mode = mode; BVID.state = 'loop'; BVID.to = null; BVID.xf = 0;
   vidSet(BVID.cur, mode, true); vidPlay(BVID.cur, true);
   BVID.el[1 - BVID.cur].pause();   // the next film starts loading once this loop plays (see updateVideo)
 }
 // the Night/Day button on the beach plays the film from one loop to the other
 function vidNight(on) {
   const want = on ? 'night' : 'day';
-  if (BVID.state === 'trans') { BVID.after = want; return; }
+  if (BVID.state === 'trans') return;   // the button is busy until the film is over
   if (BVID.state !== 'loop' || BVID.mode === want) return;
-  const o = 1 - BVID.cur; BVID.to = want; BVID.after = null; BVID.state = 'trans'; BVID.xf = 0; BVID.xf2 = 0; BVID.nightFrom = night; BVID.failT = 0;
+  const o = 1 - BVID.cur; BVID.to = want; BVID.state = 'trans'; BVID.xf = 0; BVID.xf2 = 0; BVID.nightFrom = night; BVID.failT = 0;
   vidSet(o, filmFrom(BVID.mode), false); vidPlay(o, true);
 }
 function vidSkipTrans() { const to = BVID.to || BVID.mode; vidStart(to); night = to === 'night' ? 1 : 0; }
@@ -1735,7 +1738,6 @@ function updateVideo(dt) {
     if ((BVID.xf2 || 0) >= 1) {
       BVID.mode = BVID.to; BVID.state = 'loop'; BVID.to = null; BVID.xf2 = 0; night = BVID.mode === 'night' ? 1 : 0; filmW = 0;
       tv.pause(); vidSet(o, filmFrom(BVID.mode), false);
-      const nxt = BVID.after; BVID.after = null; if (nxt && nxt !== BVID.mode) vidNight(nxt === 'night');
     }
   }
   // once the loop is playing, have the next film ready (loading it earlier would slow the loop down)
@@ -2242,7 +2244,7 @@ function openBook(hl = []) {
   const grid = $('#bookGrid'); grid.innerHTML = '';
   for (const id of GLYPH_IDS) { const n = Book.count(id), b = document.createElement('button'); b.className = 'tile' + (n ? ' got' : '') + (hl.includes(id) ? ' new' : ''); b.style.setProperty('--tc', css(glyphColor(id)));
     b.innerHTML = `${id}${n ? `<span class="stars">${'⭐'.repeat(Math.min(3, n))}${n > 3 ? '+' : ''}</span>` : ''}`;
-    b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); press(b); Snd.pop(700, 0.12); setTimeout(() => startTrace(id), 120); });
+    b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (!gate('write', 1.0, inReward)) return; press(b); Snd.pop(700, 0.12); setTimeout(() => startTrace(id), 120); });
     grid.appendChild(b); }
   const pend = pendingLetters(), bc = $('#bCollect');
   bc.disabled = !pend.length;
@@ -2495,7 +2497,25 @@ const PAINTS = [
   { id: 'green', col: [0.35, 0.86, 0.5], f: 1046.5 }, { id: 'blue', col: [0.35, 0.68, 1], f: 1174.7 }, { id: 'purple', col: [0.66, 0.47, 1], f: 1318.5 },
 ];
 function press(el) { el.classList.add('press'); setTimeout(() => el.classList.remove('press'), 140); }
-function onBtn(el, fn) { el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Snd.unlock(); if (!started) return; press(el); fn(e); }); }
+// impatient fingers: a tap on a busy button, or one that comes again too soon, only makes the button wiggle
+const tapT = {}, BUSY = [];
+let tapK = 0;
+function nope(el) { if (!el) return; el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); if (thr('nope', 250)) Snd.pop(330, 0.08); }
+function gate(key, gap, busy, el) {
+  const now = performance.now();
+  if ((busy && busy()) || now - (tapT[key] ?? -1e9) < gap * 1000) { nope(el); return false; }
+  tapT[key] = now; return true;
+}
+function onBtn(el, fn, opt = {}) {
+  const key = opt.key || 'b' + tapK++;
+  if (opt.busy) BUSY.push({ el, busy: opt.busy, on: false });
+  el.addEventListener('animationend', () => el.classList.remove('nope'));
+  el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); Snd.unlock(); if (!started) return;
+    if (!gate(key, opt.gap || 0, opt.busy, el)) return; press(el); fn(e); });
+}
+function updBusy() { for (const b of BUSY) { const on = !!b.busy(); if (on !== b.on) { b.on = on; b.el.classList.toggle('busy', on); } } }
+const inReward = () => Trace.active && Trace.phase === 'reward';   // the letter's reward is playing out: don't let a tap cut it short
+const tilting = () => Beach.v > 0 && Beach.v < 1;
 const pal = $('#palette');
 for (const pt of PAINTS) {
   const b = document.createElement('button'); b.className = 'dot' + (pt.id === 'none' ? ' sel' : ''); b.textContent = pt.ic || ''; b.setAttribute('aria-label', pt.id);
@@ -2505,7 +2525,7 @@ for (const pt of PAINTS) {
 }
 for (const m of AVAIL) {
   const M = MATS[m], b = document.createElement('button'); b.className = 'btn mbtn'; b.style.setProperty('--c', M.c); b.innerHTML = `${M.ic}<span class="lbl">${M.name}</span>`;
-  onBtn(b, () => { closePicker(); const p = randSpot(); addWhirl(p.x, p.y, 80, 0.4, 1.0, 0.004); spawnAt(p.x, p.y, m); });
+  onBtn(b, () => { closePicker(); const p = randSpot(); addWhirl(p.x, p.y, 80, 0.4, 1.0, 0.004); spawnAt(p.x, p.y, m); }, { key: 'spawn', gap: 0.7 });
   picker.appendChild(b);
 }
 onBtn($('#bSun'), () => {
@@ -2515,21 +2535,21 @@ onBtn($('#bSun'), () => {
   nightTarget ? Snd.night() : Snd.day();
   if (Beach.tgt) vidNight(!!nightTarget);
   for (const s of sprites) if (s.visible() && !s.ptr && s.state !== 'walk' && Math.random() < 0.7) { s.arms(0.8); s.mood = nightTarget ? 'surprised' : 'giggle'; s.moodT = 0.8; }
-});
-onBtn($('#bWave'), () => { closePicker(); startWave(); });
-onBtn($('#bSwirl'), () => swirlAway());
-$('#bCollect').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); const b = e.currentTarget; if (b.disabled) return; b.classList.add('press'); setTimeout(() => { b.classList.remove('press'); closeBook(); collectLetters(); }, 140); });
-onBtn($('#bSummon'), () => { picker.classList.toggle('open'); Snd.pop(picker.classList.contains('open') ? 650 : 500, 0.15); });
+}, { gap: 1.2, busy: () => Beach.tgt && BVID.state === 'trans' });   // on the beach: one sunset/sunrise at a time
+onBtn($('#bWave'), () => { closePicker(); startWave(); }, { busy: () => !!wave || inReward() || tilting() });
+onBtn($('#bSwirl'), () => swirlAway(), { gap: 2.0, busy: inReward });
+$('#bCollect').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); const b = e.currentTarget; if (b.disabled) return; b.disabled = true; b.classList.add('press'); setTimeout(() => { b.classList.remove('press'); closeBook(); collectLetters(); }, 140); });
+onBtn($('#bSummon'), () => { picker.classList.toggle('open'); Snd.pop(picker.classList.contains('open') ? 650 : 500, 0.15); }, { gap: 0.3 });
 const bMusic = $('#bMusic'), bSound = $('#bSound');
 function syncAudioBtns() { bMusic.classList.toggle('off', !Snd.musOn); bSound.classList.toggle('off', !Snd.sfxOn); bSound.textContent = Snd.sfxOn ? '🔊' : '🔇'; }
-onBtn(bMusic, () => { Snd.setMusic(!Snd.musOn); syncAudioBtns(); });
-onBtn(bSound, () => { Snd.setSfx(!Snd.sfxOn); syncAudioBtns(); if (Snd.sfxOn) Snd.pop(); });
+onBtn(bMusic, () => { Snd.setMusic(!Snd.musOn); syncAudioBtns(); }, { gap: 0.3 });
+onBtn(bSound, () => { Snd.setSfx(!Snd.sfxOn); syncAudioBtns(); if (Snd.sfxOn) Snd.pop(); }, { gap: 0.3 });
 syncAudioBtns();
 let wakeLock = null;
 async function keepAwake() { try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} }
-onBtn($('#bWrite'), () => { closePicker(); startTrace(nextGlyph(Trace.active ? Trace.id : null)); });
-onBtn($('#bBook'), () => { bookOpen ? closeBook() : openBook(); });
-onBtn($('#bTraceX'), () => { endTrace(false); Snd.pop(500, 0.15); });
+onBtn($('#bWrite'), () => { closePicker(); startTrace(nextGlyph(Trace.active ? Trace.id : null)); }, { key: 'write', gap: 1.0, busy: inReward });
+onBtn($('#bBook'), () => { bookOpen ? closeBook() : openBook(); }, { gap: 0.4 });
+onBtn($('#bTraceX'), () => { endTrace(false); Snd.pop(500, 0.15); }, { busy: inReward });
 onBtn(homeBtn, () => { closePicker(); leaveBeach(); });
 $('#bBookX').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); closeBook(); Snd.pop(500, 0.12); });
 bookEl.addEventListener('pointerdown', e => { if (e.target === bookEl) { e.preventDefault(); closeBook(); } });
@@ -2586,7 +2606,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const rawMs = now - last; let dt = rawMs / 1000; last = now; perfTick(rawMs); if (dt > 0.05) dt = 0.05; if (dt <= 0) return; T += dt;
   const pf = PROF.on; let q0 = pf ? performance.now() : 0; const mark = pf ? k => { const q = performance.now(); PROF.acc[k] = (PROF.acc[k] || 0) + q - q0; PROF.mx[k] = Math.max(PROF.mx[k] || 0, q - q0); q0 = q; } : null;
-  updateBeach(dt); updatePointers(dt); updateWhirls(dt); updateWave(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
+  updateBeach(dt); updBusy(); updatePointers(dt); updateWhirls(dt); updateWave(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
   if (pf) mark('misc');
   for (const s of sprites) s.update(dt);
   if (pf) mark('sprites');

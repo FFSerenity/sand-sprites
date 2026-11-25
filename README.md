@@ -12,6 +12,7 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 - **Tap** a sprite to make it bounce, **press and hold** to squish it, **drag** to stretch it, **fling** it to bounce off the walls.
 - **Colours on the left** paint the sand (rainbow changes as you draw, ✋ just mixes).
 - **🌙 Night** makes things glow, **🌊 Smooth** washes in fresh sand, **🌀 Swirl** pulls every sprite except the letter friends down into the sand, **👾 Summon** lets you pick a material.
+- Buttons don't stack up impatient taps: a button that is busy (a sunset or sunrise playing, a wave already rolling, the reward after a letter) or tapped again too soon just wiggles and dims instead of acting.
 
 ## Learning: write numbers and letters
 - Tap **✏️ Write**, tap a **magic star** that sometimes falls into the sand, or pick a tile in the **📖 book**.
