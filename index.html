@@ -455,8 +455,9 @@ void main(){float d=length(vL);float a=smoothstep(1.0,0.25,d)*vC.a;gl_FragColor=
 // beach props: premultiplied picture; at night darkened to moonlight (aC.y) with lit windows from the emission map (aC.z)
 const VS_PR = `attribute vec2 aPos;attribute vec2 aB;attribute vec4 aC;uniform vec2 uView;varying vec2 vUV;varying vec4 vC;
 void main(){vUV=aB;vC=aC;gl_Position=vec4(aPos.x/uView.x*2.-1.,1.-aPos.y/uView.y*2.,0.,1.);}`;
-const FS_PR = `precision mediump float;varying vec2 vUV;varying vec4 vC;uniform sampler2D uP;uniform sampler2D uE;uniform float uNight;uniform float uTime;
-void main(){if(vC.w>0.5){gl_FragColor=vec4(texture2D(uP,vUV).rgb,texture2D(uE,vUV).r)*vC.x;return;}
+const FS_PR = `precision mediump float;varying vec2 vUV;varying vec4 vC;uniform sampler2D uP;uniform sampler2D uE;uniform float uNight;uniform float uTime;uniform vec2 uRes;uniform float uDpr;
+void main(){if(vC.w>1.5){if((uRes.y-gl_FragCoord.y)/uDpr>vC.y)discard;gl_FragColor=texture2D(uP,vUV)*vC.x;return;}
+if(vC.w>0.5){gl_FragColor=vec4(texture2D(uP,vUV).rgb,texture2D(uE,vUV).r)*vC.x;return;}
 vec4 c=texture2D(uP,vUV);if(c.a<0.004)discard;float e=texture2D(uE,vUV).r*vC.z*(0.88+0.12*sin(uTime*2.3+vUV.x*9.0));
 vec3 col=mix(c.rgb,c.rgb*vec3(0.56,0.58,0.9),uNight*vC.y)+e*uNight*vec3(1.0,0.78,0.40)*c.a;gl_FragColor=vec4(col,c.a)*vC.x;}`;
 // sprites are drawn upright around their ground point: uBB = (ground x, y on the tray, the same point on screen), uBK = scale there
@@ -665,7 +666,7 @@ function initGL() {
   progBg = mkProg(VS_TRI, COMMON + FS_BG, UBG, COMMON_U);
   progWave = mkProg(VS_TRI, COMMON + FS_WAVE, UWV, COMMON_U);
   progSh = mkProg(VS_SH, FS_SH, USH, ['uView']);
-  progPr = mkProg(VS_PR, FS_PR, UPR, ['uView', 'uP', 'uE', 'uNight', 'uTime']);
+  progPr = mkProg(VS_PR, FS_PR, UPR, ['uView', 'uP', 'uE', 'uNight', 'uTime', 'uRes', 'uDpr']);
   progSp = mkProg(VS_SP, (deriv ? '#extension GL_OES_standard_derivatives : enable\n' : '#define NO_DERIV\n') + COMMON + FS_SP, USP,
     COMMON_U.concat(['uView', 'uBB', 'uBK', 'uCol', 'uMat', 'uDents', 'uSlot', 'uFace', 'uR', 'uClip', 'uFaceOn', 'uP', 'uSeed', 'uCols', 'uNCol']));
   bufTri = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bufTri); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -707,7 +708,7 @@ function upProps(i) { const im = PIMG[i], t = i ? glTexE : glTexP; if (!gl || !t
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); }
 // bump PROPS_V whenever the props pictures change: a new address can't be served stale from a cache next to a newer page
-const PROPS_V = 4;
+const PROPS_V = 5;
 PIMG.forEach((im, i) => { im.onload = () => { propsReady++; upProps(i); }; im.src = (i ? 'beach/props_e.png' : 'beach/props.webp') + '?v=' + PROPS_V; });
 // snapshot of the sand (colour + height) taken on arriving at the beach: afterwards only changes since then are drawn over the picture
 let snapA8 = null, snapW = 0, snapH = 0;
@@ -766,7 +767,7 @@ function renderGL() {
   // props: one upload; each is drawn just before the first sprite standing in front of it
   let pj = 0; const pv = pq.length ? propVerts(pq) : null;
   const propsUpTo = (ymax, sp) => { const j0 = pj; while (pj < pq.length && pq[pj].by <= ymax) pj++; if (pj === j0) return;
-    gl.useProgram(progPr); gl.uniform2f(UPR.uView, W, H); gl.uniform1f(UPR.uNight, Math.max(night, nightBoost)); gl.uniform1f(UPR.uTime, T); gl.uniform1i(UPR.uP, 6); gl.uniform1i(UPR.uE, 7);
+    gl.useProgram(progPr); gl.uniform2f(UPR.uView, W, H); gl.uniform1f(UPR.uNight, Math.max(night, nightBoost)); gl.uniform1f(UPR.uTime, T); gl.uniform1i(UPR.uP, 6); gl.uniform1i(UPR.uE, 7); gl.uniform2f(UPR.uRes, glc.width, glc.height); gl.uniform1f(UPR.uDpr, glc.height / H);
     gl.bindBuffer(gl.ARRAY_BUFFER, bufPr); gl.bufferData(gl.ARRAY_BUFFER, pv, gl.DYNAMIC_DRAW); attribs(3);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 32, 0); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 8); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16);
     gl.drawArrays(gl.TRIANGLES, pq[j0].v0, pq[pj - 1].v0 + pq[pj - 1].vn - pq[j0].v0);
@@ -1711,7 +1712,7 @@ function enterBeach() {
   Beach.tgt = 1; Beach.arrived = false; Beach.then = null;
   if (T - Beach.snapT > 3) Beach.snapped = false;   // no fresh snapshot from a letter: take one during the tilt
   magic = null; closePicker(); Snd.whoosh(false); homeBtn.classList.add('show'); ttx.classList.remove('show');
-  vidStart(nightTarget ? 'night' : 'day');
+  vidStart(nightTarget ? 'night' : 'day'); loadFireworks();
 }
 function leaveBeach(then) {
   if (!Beach.tgt && Beach.v <= 0) { if (then) then(); return; }
@@ -1726,10 +1727,10 @@ function arriveBeach() { // everyone jumps for joy on the sand
 
 // ---------- beach props: placed as in the concept painting, each with a day and a night form; one more step for each letter friend on the beach (4 = all) ----------
 // where each picture sits in beach/props.webp
-const PATL = { w: 1024, h: 2048, r: { castle: [12, 12, 509, 520], jar: [533, 12, 366, 400], bucket: [12, 544, 285, 384], star: [309, 544, 235, 220], shell: [556, 544, 265, 200], starfish: [12, 940, 240, 170] } };
+const PATL = { w: 1024, h: 2048, r: {"castle": [12, 12, 509, 520], "jar": [533, 12, 366, 400], "bucket": [12, 544, 285, 384], "dolphin": [12, 940, 362, 300], "splash": [12, 1252, 268, 220], "star": [292, 1252, 235, 220], "shell": [12, 1484, 265, 200], "starfish": [289, 1484, 240, 170]} };
 // how each prop sits in the sand, day and night (AI-painted into the real beach, kept as "darken the sand" (glow map channel) + "add light" (rgb)):
 // key = prop index + d/n; offset x, y, width, height in prop heights from its foot, then the tile in the atlas
-const CONT = {"3n": [-0.9707, -0.6334, 1.9591, 1.0059, 264, 940, 611, 314], "0n": [-0.9708, -0.6044, 1.9461, 0.9467, 12, 1266, 467, 227], "4n": [-0.9903, -0.5144, 2.0223, 0.8874, 491, 1266, 485, 213], "3d": [-0.7422, -0.2017, 1.5216, 0.4082, 12, 1505, 475, 127], "0d": [-0.6456, -0.2581, 1.2464, 0.4708, 499, 1505, 287, 108], "2n": [-1.0975, -0.5919, 2.2488, 0.6816, 12, 1644, 297, 90], "1n": [-1.1985, -0.5876, 2.3885, 0.6689, 321, 1644, 315, 88], "4d": [-0.8371, -0.2995, 1.767, 0.485, 648, 1644, 180, 49], "2d": [-0.9773, -0.2954, 1.8968, 0.4252, 12, 1746, 193, 43], "1d": [-0.7928, -0.2536, 1.5619, 0.2943, 217, 1746, 187, 35]};
+const CONT = {"3n": [-0.9707, -0.6334, 1.9591, 1.0059, 309, 544, 611, 314], "0n": [-0.9708, -0.6044, 1.9461, 0.9467, 386, 940, 467, 227], "4n": [-0.9903, -0.5144, 2.0223, 0.8874, 539, 1252, 485, 213], "3d": [-0.7422, -0.2017, 1.5216, 0.4082, 541, 1484, 475, 127], "0d": [-0.6456, -0.2581, 1.2464, 0.4708, 533, 424, 287, 108], "2n": [-1.0975, -0.5919, 2.2488, 0.6816, 12, 1696, 297, 90], "1n": [-1.1985, -0.5876, 2.3885, 0.6689, 321, 1696, 315, 88], "4d": [-0.8371, -0.2995, 1.767, 0.485, 832, 424, 180, 49], "2d": [-0.9773, -0.2954, 1.8968, 0.4252, 309, 870, 193, 43], "1d": [-0.7928, -0.2536, 1.5619, 0.2943, 832, 485, 187, 35]};
 // st: step; d / n: day and night picture (the bucket becomes a star jar, shells and starfish become glowing stars, the castle lights up);
 // x, y: where its foot stands in the painting (fraction of the screen; y from the waterline 0.5 down to the bottom 1); leftOf: just left of that button instead of x;
 // hd / hn: height (fraction of the screen's short side); tn: how much the night darkens the night picture; emit: lit windows; glow: night halo
@@ -1767,7 +1768,7 @@ function placeProps() {
   }
 }
 function updateProps(dt) {
-  placeProps();
+  placeProps(); updateSea(dt);
   const want = Math.min(PROP_STEPS, letterCount()), live = Beach.tgt && Beach.v >= 1 && BV > 0.99;
   if (!live) Props.st = want, Props.wait = 0;
   else if (want !== Props.st) {   // on the beach: a new step pops in a moment after the new friend appears; collected friends take theirs away
@@ -1806,12 +1807,21 @@ function propsToDraw() {
     const rd = PATL.r[p.d], wd = p.hd * R * rd[2] / rd[3];
     out.push({ p, nt, bx: p.wx, by: p.wy, sx: PX, sy: PY, sc, a, sr: Math.max(wd, ww) * 0.4 / (p.K1 * 1.25), imgs, wg: p.wig > 0 ? Math.sin(p.wig * 30) * 0.16 * p.wig / 0.6 : 0, v0: 0, vn: 0 });
   }
-  return out.sort((a, b) => a.by - b.by);
+  out.sort((a, b) => a.by - b.by);
+  const sq = seaQuads(); if (sq.length) out.unshift({ sea: sq, by: -1e9, v0: 0, vn: 0 });
+  return out;
 }
 let prBuf = new Float32Array(16 * 6 * 8);
 function propVerts(pq) {
-  let n = 0; const need = pq.length * 4 * 6 * 8; if (prBuf.length < need) prBuf = new Float32Array(need);
+  let n = 0; const need = (pq.length * 4 + (pq[0] && pq[0].sea ? pq[0].sea.length : 0)) * 6 * 8; if (prBuf.length < need) prBuf = new Float32Array(need);
   for (const q of pq) { q.v0 = n / 8;
+    if (q.sea) {   // dolphins (cut off below the water line) and their splashes, behind everything on the beach
+      for (const d of q.sea) { const r = PATL.r[d.img], cs = Math.cos(d.rot), sn = Math.sin(d.rot), fl = d.flip ? -1 : 1;
+        const u0 = r[0] / PATL.w, v0 = r[1] / PATL.h, u1 = (r[0] + r[2]) / PATL.w, v1 = (r[1] + r[3]) / PATL.h;
+        for (const [cx, cy, u, v] of [[-0.5, -d.ay, u0, v0], [0.5, -d.ay, u1, v0], [0.5, 1 - d.ay, u1, v1], [-0.5, -d.ay, u0, v0], [0.5, 1 - d.ay, u1, v1], [-0.5, 1 - d.ay, u0, v1]]) {
+          const lx = cx * d.w * fl, ly = cy * d.h;
+          prBuf[n++] = d.x + lx * cs - ly * sn; prBuf[n++] = d.y + lx * sn + ly * cs; prBuf[n++] = u; prBuf[n++] = v; prBuf[n++] = d.a; prBuf[n++] = d.clip; prBuf[n++] = 0; prBuf[n++] = d.clip ? 2 : 0; } }
+      q.vn = n / 8 - q.v0; continue; }
     for (const [img, a, tint, hf] of q.imgs) { const r = PATL.r[img], hh = hf * Props.R * q.sc, ww = hh * r[2] / r[3];
       const squash = 1 + Math.sin(q.p.wig * 30) * 0.06 * q.p.wig, cs = Math.cos(q.wg), sn = Math.sin(q.wg);
       const u0 = r[0] / PATL.w, v0 = r[1] / PATL.h, u1 = (r[0] + r[2]) / PATL.w, v1 = (r[1] + r[3]) / PATL.h, em = img === 'castle' ? q.p.emit || 0 : 0;
@@ -1841,10 +1851,92 @@ function tapProp(p) {
      castle: () => Snd.chimes([784, 1046.5, 1318.5, 1568], 0.08, 0.1) })[p.snd]();
   sparks(x, y, p.snd === 'castle' ? 10 : 6, baseR * (p.snd === 'castle' ? 1.6 : 0.8), nt ? '#fff3b0' : null);
 }
+// ---------- the sea at the last step: dolphins leap out of it by day, fireworks go up at night ----------
+const Sea = { dol: [], fw: [], dT: 1.5, fT: 0.8 };
+// four bursts on black, 2 x 2, loaded on the first visit to the beach; the black is turned see-through once, on load
+const FWIMG = new Image(); let FWC = null;
+FWIMG.onload = () => { try {
+  const c = document.createElement('canvas'); c.width = FWIMG.naturalWidth; c.height = FWIMG.naturalHeight;
+  const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(FWIMG, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height), q = d.data;
+  for (let i = 0; i < q.length; i += 4) { const a = Math.min(255, Math.max(q[i], q[i + 1], q[i + 2]) * 1.1); if (a < 8) { q[i + 3] = 0; continue; }
+    const k = 255 / a; q[i] = Math.min(255, q[i] * k); q[i + 1] = Math.min(255, q[i + 1] * k); q[i + 2] = Math.min(255, q[i + 2] * k); q[i + 3] = a; }
+  x.putImageData(d, 0, 0); FWC = c; } catch (e) {} };
+const loadFireworks = () => { if (!FWIMG.src) FWIMG.src = 'beach/fireworks.jpg?v=1'; };
+function seaBand() { const [ix, iy, iw, ih] = CAM.img, hY = iy + PIC.hor * ih; return { hY, y0: hY + 0.03 * ih, y1: hY + 0.12 * ih, ih }; }
+const seaOn = () => Props.st >= PROP_STEPS && Beach.tgt && Beach.v >= 1 && BV > 0.99;
+function addDolphin(x, y) {
+  if (Sea.dol.length >= 3) return;
+  const b = seaBand(); y = clamp(y ?? rand(b.y0, b.y1), b.y0, b.y1); const L = (y - b.hY) * 1.25 + 0.065 * Math.min(b.ih, W * 0.62);
+  x = clamp(x ?? rand(W * 0.12, W * 0.88), L, W - L);
+  const dir = x > W / 2 ? -1 : 1;
+  Sea.dol.push({ x, y, L, dir, t: -0.25, dur: rand(1.35, 1.7), sp0: false, sp1: false });
+  if (Math.random() < 0.35 && Sea.dol.length < 3) Sea.dol.push({ x: clamp(x - dir * L * 1.1, L, W - L), y: Math.min(b.y1, y + L * 0.12), L: L * 0.8, dir, t: -0.6, dur: 1.4, sp0: false, sp1: false });   // a little one follows
+}
+function addFirework(x, y) {
+  if (Sea.fw.length >= 6) return;
+  const b = seaBand(), r = rand(0.12, 0.19) * b.ih, top = Math.max(CAM.img[1], 0) + r * 0.75;
+  x = clamp(x ?? rand(W * 0.1, W * 0.9), r * 0.6, W - r * 0.6); y = clamp(y ?? rand(top, b.hY - r * 0.9), top, b.hY - r * 0.5);
+  Sea.fw.push({ x, y, r, k: (Math.random() * 4) | 0, t: 0, rise: rand(0.55, 0.8), x0: x + rand(-20, 20), y0: b.hY + 4, boom: false });
+  Snd.whistle();
+}
+function updateSea(dt) {
+  const on = seaOn(), nt = Math.max(night, nightBoost);
+  if (on && nt < 0.4) { Sea.dT -= dt; if (Sea.dT <= 0) { Sea.dT = rand(4, 8); addDolphin(); } }
+  if (on && nt > 0.6) { Sea.fT -= dt; if (Sea.fT <= 0) { Sea.fT = rand(1.2, 2.8); addFirework(); if (Math.random() < 0.3) setTimeout(() => seaOn() && addFirework(), 350); } }
+  if (!BV) { Sea.dol.length = 0; Sea.fw.length = 0; return; }
+  for (let i = Sea.dol.length - 1; i >= 0; i--) { const d = Sea.dol[i]; d.t += dt / d.dur;
+    if (d.t >= 0 && !d.sp0) { d.sp0 = true; Snd.splat(0.3); }
+    if (d.t >= 0.97 && !d.sp1) { d.sp1 = true; Snd.splat(0.4); }
+    if (d.t > 1.6) Sea.dol.splice(i, 1); }
+  for (let i = Sea.fw.length - 1; i >= 0; i--) { const f = Sea.fw[i]; f.t += dt;
+    if (!f.boom && f.t >= f.rise) { f.boom = true; Snd.boom(); }
+    if (f.t > f.rise + 2.2) Sea.fw.splice(i, 1); }
+}
+// tapping the sea (by day) or the sky (at night) once everything is out
+function seaTap(X, Y) {
+  if (!seaOn()) return false; const b = seaBand(); if (Y > b.y1 + 0.03 * b.ih) return false;
+  if (night > 0.5) addFirework(X, Y); else addDolphin(X, Y < b.hY ? undefined : Y);
+  return true;
+}
+function seaQuads() {
+  const out = []; if (!BV || Beach.ov <= 0.01) return out;
+  for (const d of Sea.dol) {
+    const L = d.L, a = Beach.ov;
+    // splashes where it leaves and re-enters the water
+    for (const [tt, x] of [[d.t, d.x], [d.t - 0.97, d.x + d.dir * L * 1.3]]) { if (tt < 0 || tt > 0.6) continue;
+      const k = Math.min(1, tt / 0.12), f = 1 - smooth01((tt - 0.15) / 0.45), sw = L * 0.75, sh = sw * 220 / 268 * (0.35 + 0.65 * k);
+      out.push({ img: 'splash', x, y: d.y + 2, w: sw * (0.8 + 0.2 * k), h: sh, ay: 1, rot: 0, flip: false, a: a * f, clip: 0 }); }
+    if (d.t < 0 || d.t > 1) continue;
+    const t = d.t, hx = d.dir * L * 1.3, cx = d.x + hx * t, cy = d.y - L * 0.1 - 4 * L * 0.72 * t * (1 - t) + L * 0.18;
+    const ang = Math.atan2(-L * 2.9 * (1 - 2 * t), L * 1.3) + 0.82;   // the picture is already leaping up and to the right
+    out.push({ img: 'dolphin', x: cx, y: cy, w: L, h: L * 300 / 362, ay: 0.5, rot: d.dir > 0 ? ang : -ang, flip: d.dir < 0, a: a * Math.min(1, (1 - Math.max(0, night - 0.4) * 2)), clip: d.y + 1 });
+  }
+  return out;
+}
+function drawSeaFx(c) {
+  if (!Sea.fw.length || !FWC) return;
+  c.save(); c.globalCompositeOperation = 'lighter';
+  for (const f of Sea.fw) {
+    if (f.t < f.rise) {   // the rocket going up: a small spark with a short fading tail
+      const u = f.t / f.rise, e = 1 - (1 - u) * (1 - u), x = f.x0 + (f.x - f.x0) * e, y = f.y0 + (f.y - f.y0) * e, ty = y + 26 + 30 * (1 - u);
+      const g = c.createLinearGradient(x, y, x, ty); g.addColorStop(0, 'rgba(255,235,190,0.9)'); g.addColorStop(1, 'rgba(255,200,120,0)');
+      c.strokeStyle = g; c.lineWidth = 2.5; c.beginPath(); c.moveTo(x, y); c.lineTo(x + (f.x0 - f.x) * 0.04, ty); c.stroke();
+      c.globalAlpha = 0.9; c.fillStyle = '#fff6d8'; c.beginPath(); c.arc(x, y, 2.6, 0, TAU); c.fill(); c.globalAlpha = 1; continue; }
+    const u = f.t - f.rise, grow = 1 - Math.pow(1 - Math.min(1, u / 0.55), 3), R = f.r * (0.2 + 0.85 * grow);
+    const al = (u < 0.08 ? u / 0.08 : 1) * (1 - smooth01((u - 0.5) / 1.6)) * (0.85 + 0.15 * Math.sin(u * 40 + f.k)) * Beach.ov;
+    if (al <= 0.01) continue;
+    c.globalAlpha = al; const sx = (f.k % 2) * 512, sy = (f.k >> 1) * 512;
+    c.drawImage(FWC, sx, sy, 512, 512, f.x - R, f.y - R + u * f.r * 0.12, R * 2, R * 2);
+  }
+  c.restore();
+}
+
 // night halos around the glowing props, and the rainbow in the sky once everything is out (2D, over the picture)
 function drawPropsFx(c) {
   if (!BV || Beach.ov <= 0.01) return;
   const nt = Math.max(night, nightBoost);
+  drawSeaFx(c);
   if (nt > 0.02) { c.save(); c.globalCompositeOperation = 'lighter';
     for (const p of PROPS) { if (!p.glow || p.k <= 0 || !p.rect) continue;   // (glow belongs to the night form)
       const [x0, y0, x1, y1] = p.rect, cx = (x0 + x1) / 2, cy = y0 + (y1 - y0) * 0.55, R = Math.max(x1 - x0, y1 - y0) * 0.95 * p.glow;
@@ -2502,6 +2594,7 @@ function onDown(e) {
   if (hitMagic(x, y)) { p.mode = 'none'; ptrs.set(e.pointerId, p); return; }
   const s = nearStroke(x, y) ? null : hitSprite(sx, sy), pr = s || Trace.active ? null : hitProp(sx, sy);
   if (pr) { tapProp(pr); p.mode = 'none'; ptrs.set(e.pointerId, p); return; }
+  if (!s && !Trace.active && seaTap(sx, sy)) { p.mode = 'none'; ptrs.set(e.pointerId, p); return; }
   if (s) { if (s.state === 'peek') { s.reveal(); p.mode = 'none'; } else if (s.ptr) p.mode = 'none'; else { p.mode = 'sprite'; p.s = s; ptrW(p); p.hist[0].x = p.x; p.hist[0].y = p.y; s.grab(p); } }
   else if (Trace.active) traceMove(x, y, x, y);
   ptrs.set(e.pointerId, p);
@@ -2843,7 +2936,7 @@ if (initGL()) {
   for (const id of Book.data.f.slice()) if (GLYPHS[id]) { const p = randSpot(); spawnFriend(id, p.x, p.y, false); }
   requestAnimationFrame(t => { last = t; requestAnimationFrame(loop); });
 }
-window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, BVID, Props, PROPS, hitProp, assignPath, unproj: (X, Y) => UNPJ(X, Y), get night() { return night; }, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
+window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, BVID, Props, PROPS, Sea, addDolphin, addFirework, hitProp, assignPath, unproj: (X, Y) => UNPJ(X, Y), get night() { return night; }, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
 try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 })();
 </script>
