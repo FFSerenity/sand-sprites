@@ -1677,20 +1677,29 @@ function arriveBeach() { // everyone jumps for joy on the sand
 }
 
 // ---------- beach video: day and night loops, a sunset or sunrise film in between ----------
-const VSRC = { day: 'beach/day.mp4', night: 'beach/night.mp4', sunset: 'beach/sunset.mp4', sunrise: 'beach/sunrise.mp4' };
+// HEVC files are about half the size; browsers that can't play HEVC (or fail to) get the H.264 ones
+let vidHevc = (() => { try { return document.createElement('video').canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') !== ''; } catch (e) { return false; } })();
+if (/[?&]hevc\b/.test(location.search)) vidHevc = true;   // testing: try HEVC even where the browser says no
+const vsrc = name => `beach/${name}${vidHevc ? '-hevc' : ''}.mp4`;
+const filmFrom = mode => mode === 'day' ? 'sunset' : 'sunrise';
 // how far up the sand the waves reach through each loop (fraction of the picture height, 8 samples a second), measured from the videos
 const FRONT = { day: [0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.72,0.7194,0.7194,0.7189,0.7167,0.7167,0.7167,0.7156,0.715,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.72,0.7194,0.7189,0.7194,0.7211,0.7222,0.7244,0.7272,0.7283,0.7306,0.7311,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7311,0.7306,0.7294,0.7267,0.7183,0.71,0.7133,0.7167,0.7189,0.7194,0.7194,0.7194,0.7178,0.7172,0.7194,0.7206,0.7217], night: [0.7194,0.7172,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7172,0.7189,0.72,0.7222,0.7244,0.7256,0.7283,0.7306,0.7317,0.7333,0.7356,0.7372,0.7389,0.7394,0.7417,0.7417,0.7417,0.7433,0.7444,0.7444,0.7444,0.7444,0.7444,0.7467,0.7472,0.7472,0.7456,0.7444,0.7444,0.7444,0.7444,0.7433,0.7417,0.7411,0.7394,0.7417,0.7417,0.7383,0.7306,0.7322,0.735,0.7339,0.7333,0.7333,0.7333,0.7322,0.7306,0.7283,0.7261,0.725,0.7206,0.7194,0.7211,0.7211,0.7222,0.7206,0.7217,0.7222,0.7222,0.7206] };
 const BVID = { el: [$('#bgv0'), $('#bgv1')], name: [null, null], ok: [false, false], cur: 0, state: 'off', mode: 'day', to: null, after: null, xf: 0, vis: 0, nightFrom: 0, failT: 0 };
 BVID.el.forEach((v, i) => {
   v.addEventListener('playing', () => { BVID.ok[i] = true; });
-  v.addEventListener('error', () => { BVID.ok[i] = false; if (BVID.state === 'trans' && i !== BVID.cur) vidSkipTrans(); });
+  v.addEventListener('error', () => { BVID.ok[i] = false;
+    if (vidHevc && BVID.name[i]) {   // couldn't play the HEVC file: switch to H.264 and reload this one
+      vidHevc = false; const n = BVID.name[i]; BVID.name[i] = null; vidSet(i, n, v.loop);
+      if (BVID.state !== 'off' && (i === BVID.cur || BVID.state === 'trans')) vidPlay(i, true);
+      return; }
+    if (BVID.state === 'trans' && i !== BVID.cur) vidSkipTrans(); });
 });
-function vidSet(i, name, loop) { const v = BVID.el[i]; v.loop = loop; if (BVID.name[i] !== name) { BVID.name[i] = name; BVID.ok[i] = false; v.src = VSRC[name]; } }
+function vidSet(i, name, loop) { const v = BVID.el[i]; v.loop = loop; if (BVID.name[i] !== name) { BVID.name[i] = name; BVID.ok[i] = false; v.src = vsrc(name); } }
 function vidPlay(i, from0) { const v = BVID.el[i]; try { if (from0) v.currentTime = 0; } catch (e) {} const p = v.play(); if (p && p.catch) p.catch(() => {}); }
 function vidStart(mode) {
   BVID.mode = mode; BVID.state = 'loop'; BVID.to = BVID.after = null; BVID.xf = 0;
   vidSet(BVID.cur, mode, true); vidPlay(BVID.cur, true);
-  const o = 1 - BVID.cur; vidSet(o, mode === 'day' ? 'sunset' : 'sunrise', false); BVID.el[o].pause();   // have the next film ready
+  BVID.el[1 - BVID.cur].pause();   // the next film starts loading once this loop plays (see updateVideo)
 }
 // the Night/Day button on the beach plays the film from one loop to the other
 function vidNight(on) {
@@ -1698,7 +1707,7 @@ function vidNight(on) {
   if (BVID.state === 'trans') { BVID.after = want; return; }
   if (BVID.state !== 'loop' || BVID.mode === want) return;
   const o = 1 - BVID.cur; BVID.to = want; BVID.after = null; BVID.state = 'trans'; BVID.xf = 0; BVID.xf2 = 0; BVID.nightFrom = night; BVID.failT = 0;
-  vidSet(o, want === 'night' ? 'sunset' : 'sunrise', false); vidPlay(o, true);
+  vidSet(o, filmFrom(BVID.mode), false); vidPlay(o, true);
 }
 function vidSkipTrans() { const to = BVID.to || BVID.mode; vidStart(to); night = to === 'night' ? 1 : 0; }
 const curve = p => p < 0.5 ? p / 0.5 * 0.3 : 0.3 + (p - 0.5) / 0.5 * 0.7;   // how dark it is through the film (sun at the horizon half way)
@@ -1725,10 +1734,12 @@ function updateVideo(dt) {
     filmW = BVID.xf * (1 - (BVID.xf2 || 0));
     if ((BVID.xf2 || 0) >= 1) {
       BVID.mode = BVID.to; BVID.state = 'loop'; BVID.to = null; BVID.xf2 = 0; night = BVID.mode === 'night' ? 1 : 0; filmW = 0;
-      tv.pause(); vidSet(o, BVID.mode === 'day' ? 'sunset' : 'sunrise', false);
+      tv.pause(); vidSet(o, filmFrom(BVID.mode), false);
       const nxt = BVID.after; BVID.after = null; if (nxt && nxt !== BVID.mode) vidNight(nxt === 'night');
     }
   }
+  // once the loop is playing, have the next film ready (loading it earlier would slow the loop down)
+  else if (BVID.state === 'loop' && BVID.ok[c] && BVID.name[o] !== filmFrom(BVID.mode)) { vidSet(o, filmFrom(BVID.mode), false); els[o].pause(); }
   // two stacked layers (bgv1 above bgv0): the lower one stays opaque, the upper one fades
   const w1 = o === 1 ? filmW : 1 - filmW, fade = smooth01(BV / 0.55);
   const op = [BVID.ok[0] && w1 < 0.999 ? 1 : 0, BVID.ok[1] ? w1 : 0];

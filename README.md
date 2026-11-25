@@ -39,7 +39,7 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 | 🌈 Rainbow | star | glossy flowing rainbow; **drag it onto any sprite to give it a new colour** (a different one each touch) and it paints rainbow trails in the sand |
 
 Sprites are soft bodies (a ring of springs keeping shape, volume and curvature) rendered with WebGL shaders.
-All sprites, effects and sounds are generated in code. The beach background is made of video loops and films in `beach/` (generated with Wan 2.2 from painted keyframes, with first/last-frame segments joined so they loop without a seam). The beach is the same tray seen through a tilted camera (a projective map of the tray plane laid on the picture's sand, vanishing at its horizon), so sprites and the sand keep working unchanged; sprites are drawn upright around the point they stand on.
+All sprites, effects and sounds are generated in code. The beach background is made of video loops and films in `beach/` (generated with Wan 2.2 from painted keyframes, with first/last-frame segments joined so they loop without a seam). Each video comes as HEVC (`-hevc.mp4`, about half the size, used on iPad/Safari and other browsers that can play it) and H.264 (the fallback). The beach is the same tray seen through a tilted camera (a projective map of the tray plane laid on the picture's sand, vanishing at its horizon), so sprites and the sand keep working unchanged; sprites are drawn upright around the point they stand on.
 
 ## Install on iPad
 Open the link in **Safari** → Share → **Add to Home Screen**. It runs full-screen and works offline after the first visit.
