@@ -1707,43 +1707,50 @@ function arriveBeach() { // everyone jumps for joy on the sand
   Snd.chimes([1046.5, 1318.5, 1568, 2093], 0.07, 0.07);
 }
 
-// ---------- beach props: shells, a bucket, a star jar and a sand castle; one more step for each letter friend on the beach (4 = all) ----------
+// ---------- beach props: placed as in the concept painting, each with a day and a night form; one more step for each letter friend on the beach (4 = all) ----------
 // where each picture sits in beach/props.webp
 const PATL = { w: 1024, h: 1024, r: { castle: [10, 10, 512, 503], jar: [532, 10, 276, 300], bucket: [10, 523, 269, 320], shell: [289, 523, 256, 124], starfish: [555, 523, 220, 133], star: [785, 523, 191, 178] } };
-// st: step it comes with; img (day) / nimg (night: a starfish turns into a glowing star); fx, fy: where on the tray (0 far .. 1 near);
-// h: height in sprite radii; tint: how much the night darkens it; emit: lit windows at night; glow: halo at night; snd: tap sound
+// st: step; d / n: day and night picture (the bucket becomes a star jar, shells and starfish become glowing stars, the castle lights up);
+// x, y: where its foot stands in the painting (fraction of the screen; y from the waterline 0.5 down to the bottom 1);
+// hd / hn: height (fraction of the screen's short side); tn: how much the night darkens the night picture; emit: lit windows; glow: night halo
 const PROPS = [
-  { st: 1, img: 'shell', fx: 0.17, fy: 0.87, h: 1.5, tint: 1, snd: 'shell' },
-  { st: 1, img: 'starfish', nimg: 'star', fx: 0.86, fy: 0.55, h: 1.25, tint: 1, glow: 1, snd: 'star' },
-  { st: 2, img: 'bucket', fx: 0.1, fy: 0.55, h: 3.0, tint: 1, snd: 'bucket' },
-  { st: 2, img: 'starfish', nimg: 'star', fx: 0.33, fy: 0.96, h: 1.1, tint: 1, glow: 1, snd: 'star' },
-  { st: 3, img: 'jar', fx: 0.19, fy: 0.27, h: 2.7, tint: 0.3, glow: 1.5, snd: 'jar' },
-  { st: 4, img: 'castle', fx: 0.86, fy: 0.3, h: 7.0, tint: 1, emit: 1, snd: 'castle' },
-].map((p, i) => Object.assign({ i, k: 0, wig: 0, ph: i * 1.7, rect: null }, p));
+  { st: 1, d: 'bucket', n: 'jar', x: 0.12, y: 0.86, hd: 0.235, hn: 0.25, tn: 0.25, glow: 1.4, snd: 'bucket' },
+  { st: 2, d: 'shell', n: 'star', x: 0.2, y: 0.93, hd: 0.095, hn: 0.12, tn: 0, glow: 1, snd: 'shell' },
+  { st: 2, d: 'starfish', n: 'star', x: 0.7, y: 0.97, hd: 0.07, hn: 0.105, tn: 0, glow: 1, snd: 'star' },
+  { st: 3, d: 'castle', n: 'castle', x: 0.9, y: 0.57, hd: 0.33, hn: 0.33, tn: 1, emit: 1, snd: 'castle' },
+  { st: 4, d: 'starfish', n: 'jar', x: 0.975, y: 0.64, hd: 0.06, hn: 0.15, tn: 0.25, glow: 1.2, snd: 'jar' },
+].map((p, i) => Object.assign({ i, k: 0, wig: 0, ph: i * 1.7, rect: null, wx: 0, wy: 0, K1: 1 }, p));
 const PROP_STEPS = 4;
-const Props = { st: 0, wait: 0, rain: 0 };
-const propWorld = p => [TX + (p.fxA ?? p.fx) * TW, TY + (p.fyA ?? p.fy) * TH];
-// keep every prop clear of the toolbar and the colours (they sit in different places on iPad, phone portrait and landscape)
+const Props = { st: 0, wait: 0, rain: 0, nt: 0, R: 500 };
+const propWorld = p => [p.wx, p.wy];
+// the screen spot of each prop with the camera all the way down (the tray seen from the beach), kept clear of the toolbar and the colours
 let propLay = '';
 function placeProps() {
-  const key = `${W}x${H}`; if (propLay === key || BV < 0.999) return; propLay = key;
+  if (!Beach.tgt && !BV) return;
   const rs = ['#tools', '#palette'].map(q => $(q).getBoundingClientRect()).filter(r => r.width > 0);
-  for (const p of PROPS) { let fx = p.fx, fy = p.fy;
-    for (let k = 0; k < 40; k++) {
-      PJ(TX + fx * TW, TY + fy * TH); const r0 = PATL.r[p.img], hh = p.h * baseR * PK * SB(), ww = hh * r0[2] / r0[3];
-      const b = [PX - ww / 2 - 8, PY - hh, PX + ww / 2 + 8, PY + 8];
-      if (b[0] < 4) { fx += 0.02; continue; } if (b[2] > W - 4) { fx -= 0.02; continue; }
+  const key = `${W}x${H}x${TW}x${TH}` + rs.map(r => `|${r.left | 0},${r.top | 0},${r.right | 0},${r.bottom | 0}`).join(''); if (propLay === key) return; propLay = key;
+  let ih = W / PIC.asp; if (ih < H) ih = H; const iy = H - ih, shore = iy + 0.69 * ih, yN = H + 4, yF = iy + PIC.far * ih, D = (yN - yF) / (yF - (iy + PIC.hor * ih)), sx = W / TW, cxW = TX + TW / 2;
+  Props.R = Math.min(H, W * 0.62);
+  for (const p of PROPS) {
+    const r0 = PATL.r[p.d], r1 = PATL.r[p.n], hh = Math.max(p.hd, p.hn) * Props.R, ww = Math.max(p.hd * Props.R * r0[2] / r0[3], p.hn * Props.R * r1[2] / r1[3]);
+    let X = p.x * W, Y = shore + (p.y - 0.5) / 0.5 * (H - shore);
+    for (let k = 0; k < 60; k++) {
+      const b = [X - ww / 2 - 6, Y - hh, X + ww / 2 + 6, Y + 6];
+      if (b[0] < 4) { X += 6; continue; } if (b[2] > W - 4) { X -= 6; continue; } if (b[3] > H) { Y -= 6; continue; }
       const r = rs.find(r => b[0] < r.right && b[2] > r.left && b[1] < r.bottom && b[3] > r.top); if (!r) break;
-      if (r.height > r.width * 2) fx += r.left < W / 2 ? 0.02 : -0.02; else fy -= 0.025;
+      if (r.height > r.width * 2) X += r.left < W / 2 ? 6 : -6; else Y -= 6;
     }
-    p.fxA = clamp(fx, 0.03, 0.97); p.fyA = Math.max(0.12, fy); }
+    // back onto the tray: the inverse of the beach camera at full tilt
+    const g = (Y - yN) / (yF - yN), w = clamp(g / Math.max(0.05, 1 + D - g * D), 0, 1), z = 1 + D * w;
+    p.wx = cxW + (X - W / 2) * z / sx; p.wy = TY + TH * (1 - w); p.K1 = sx / z;
+  }
 }
 function updateProps(dt) {
+  placeProps();
   const want = Math.min(PROP_STEPS, letterCount()), live = Beach.tgt && Beach.v >= 1 && BV > 0.99;
   if (!live) Props.st = want, Props.wait = 0;
   else if (want !== Props.st) {   // on the beach: a new step pops in a moment after the new friend appears; collected friends take theirs away
-    Props.wait += dt;
-    const up = want > Props.st;
+    Props.wait += dt; const up = want > Props.st;
     if (Props.wait > (up ? 0.8 : 0.25)) { Props.wait = 0; Props.st += up ? 1 : -1; if (up) propsUp(Props.st); else Snd.pop(420, 0.1); }
   } else Props.wait = 0;
   for (const p of PROPS) {
@@ -1754,24 +1761,29 @@ function updateProps(dt) {
     if (p.wig > 0) p.wig = Math.max(0, p.wig - dt);
   }
   const rw = Props.st >= PROP_STEPS ? 1 : 0; Props.rain += (live ? Math.sign(rw - Props.rain) * dt / 1.6 : rw - Props.rain); Props.rain = clamp(Props.rain, 0, 1);
+  // half way through the sunset (or sunrise) the props change form with a sparkle
+  const nt = Math.max(night, nightBoost);
+  if (live && (Props.nt - 0.5) * (nt - 0.5) < 0) { let any = false;
+    for (const p of PROPS) if (p.k > 0.5 && p.d !== p.n) { const [x, y] = propWorld(p); sparks(x, y, 10, baseR * 1.1, '#fff3b0'); any = true; }
+    if (any) Snd.chimes(nt > 0.5 ? [2093, 1760, 1568, 1318.5] : [1318.5, 1568, 1760, 2093], 0.06, 0.07); }
+  Props.nt = nt;
 }
 function propsUp(st) {   // a new step on the beach: chimes and a sparkle where each new thing appears
   Snd.chimes(st >= PROP_STEPS ? [1046.5, 1318.5, 1568, 2093, 2637] : [1318.5, 1568, 2093], 0.07, 0.09);
   for (const p of PROPS) if (p.st === st) { const [x, y] = propWorld(p); sparks(x, y, 12, baseR * 1.2, '#fff3b0'); ringP(x, y, baseR * 2.2); }
 }
 const easeBack = t => { const c = 1.9; t -= 1; return 1 + (c + 1) * t * t * t + c * t * t; };
-// the props in view, far to near, with the screen quad of each (the starfish fades into the glowing star as night falls)
+// the props in view, far to near; the day picture fades into the night one as the sun goes down
 function propsToDraw() {
   const out = []; if (!BV || Beach.ov <= 0.01) return out;
-  placeProps();
-  const nt = Math.max(night, nightBoost);
+  const nt = Math.max(night, nightBoost), R = Props.R;
   for (const p of PROPS) { if (p.k <= 0) continue;
-    const [bx, by] = propWorld(p); PJ(bx, by); const K = PK * SB(), sc = p.k < 1 ? easeBack(p.k) : 1, a = Math.min(1, p.k * 2.5) * Beach.ov;
-    const imgs = p.nimg ? [[p.img, a * (1 - nt), p.tint], [p.nimg, a * nt, 0]] : [[p.img, a, p.tint]];
-    const r0 = PATL.r[p.img], hh = p.h * baseR * K * sc, ww = hh * r0[2] / r0[3];
-    const wg = p.wig > 0 ? Math.sin(p.wig * 30) * 0.16 * p.wig / 0.6 : 0;
-    p.rect = [PX - ww / 2, PY - hh, PX + ww / 2, PY]; p.hh = hh;
-    out.push({ p, bx, by, sx: PX, sy: PY, K, sc, a, sr: p.h * baseR * sc * (r0[2] / r0[3]) * 0.42, imgs: imgs.filter(m => m[1] > 0.004), wg, v0: 0, vn: 0 });
+    PJ(p.wx, p.wy); const sc = (p.k < 1 ? easeBack(p.k) : 1) * PK / p.K1, a = Math.min(1, p.k * 2.5) * Beach.ov;
+    const imgs = (p.d === p.n ? [[p.d, a, p.tn, p.hd]] : [[p.d, a * (1 - nt), 1, p.hd], [p.n, a * nt, p.tn, p.hn]]).filter(m => m[1] > 0.004);
+    const big = nt > 0.5 ? [p.n, p.hn] : [p.d, p.hd], rb = PATL.r[big[0]], hh = big[1] * R * sc, ww = hh * rb[2] / rb[3];
+    p.rect = [PX - ww / 2, PY - hh, PX + ww / 2, PY];
+    const rd = PATL.r[p.d], wd = p.hd * R * rd[2] / rd[3];
+    out.push({ p, bx: p.wx, by: p.wy, sx: PX, sy: PY, sc, a, sr: Math.max(wd, ww) * 0.4 / (p.K1 * 1.25), imgs, wg: p.wig > 0 ? Math.sin(p.wig * 30) * 0.16 * p.wig / 0.6 : 0, v0: 0, vn: 0 });
   }
   return out.sort((a, b) => a.by - b.by);
 }
@@ -1779,9 +1791,9 @@ let prBuf = new Float32Array(16 * 6 * 8);
 function propVerts(pq) {
   let n = 0; const need = pq.length * 2 * 6 * 8; if (prBuf.length < need) prBuf = new Float32Array(need);
   for (const q of pq) { q.v0 = n / 8;
-    for (const [img, a, tint] of q.imgs) { const r = PATL.r[img], r0 = PATL.r[q.p.img], hh = q.p.h * baseR * q.K * q.sc * (img === q.p.img ? 1 : r[3] / r0[3] * r0[2] / r[2] * 1.15);
-      const ww = hh * r[2] / r[3], squash = 1 + Math.sin(q.p.wig * 30) * 0.06 * q.p.wig, cs = Math.cos(q.wg), sn = Math.sin(q.wg);
-      const u0 = r[0] / PATL.w, v0 = r[1] / PATL.h, u1 = (r[0] + r[2]) / PATL.w, v1 = (r[1] + r[3]) / PATL.h, em = q.p.emit || 0;
+    for (const [img, a, tint, hf] of q.imgs) { const r = PATL.r[img], hh = hf * Props.R * q.sc, ww = hh * r[2] / r[3];
+      const squash = 1 + Math.sin(q.p.wig * 30) * 0.06 * q.p.wig, cs = Math.cos(q.wg), sn = Math.sin(q.wg);
+      const u0 = r[0] / PATL.w, v0 = r[1] / PATL.h, u1 = (r[0] + r[2]) / PATL.w, v1 = (r[1] + r[3]) / PATL.h, em = img === 'castle' ? q.p.emit || 0 : 0;
       const C = [[-0.5, -1, u0, v0], [0.5, -1, u1, v0], [0.5, 0, u1, v1], [-0.5, -1, u0, v0], [0.5, 0, u1, v1], [-0.5, 0, u0, v1]];
       for (const [cx, cy, u, v] of C) { const lx = cx * ww * squash, ly = cy * hh / squash;
         prBuf[n++] = q.sx + lx * cs - ly * sn; prBuf[n++] = q.sy + lx * sn + ly * cs; prBuf[n++] = u; prBuf[n++] = v; prBuf[n++] = a; prBuf[n++] = tint; prBuf[n++] = em; prBuf[n++] = 0; } }
@@ -1795,18 +1807,19 @@ function hitProp(X, Y) {
   return best;
 }
 function tapProp(p) {
-  p.wig = 0.6; const [x, y] = propWorld(p);
-  const nt = night > 0.5;
-  ({ shell: () => Snd.chimes([1568, 2093, 2637], 0.05, 0.08), star: () => nt ? Snd.chimes([2093, 2637, 3136], 0.05, 0.08) : Snd.plip(), bucket: () => { Snd.pop(380, 0.2); Snd.pop(520, 0.12); },
-     jar: () => Snd.chimes([1318.5, 1760, 2349, 2637], 0.06, 0.08), castle: () => Snd.chimes([784, 1046.5, 1318.5, 1568], 0.08, 0.1) })[p.snd]();
-  sparks(x, y, p.snd === 'castle' ? 10 : 6, baseR * (p.snd === 'castle' ? 1.6 : 0.8), nt || p.glow ? '#fff3b0' : null);
+  p.wig = 0.6; const [x, y] = propWorld(p), nt = night > 0.5;
+  if (nt && p.n === 'star') Snd.chimes([2093, 2637, 3136], 0.05, 0.08);
+  else if (nt && p.n === 'jar') Snd.chimes([1318.5, 1760, 2349, 2637], 0.06, 0.08);
+  else ({ shell: () => Snd.chimes([1568, 2093, 2637], 0.05, 0.08), star: () => Snd.plip(), jar: () => Snd.plip(), bucket: () => { Snd.pop(380, 0.2); Snd.pop(520, 0.12); },
+     castle: () => Snd.chimes([784, 1046.5, 1318.5, 1568], 0.08, 0.1) })[p.snd]();
+  sparks(x, y, p.snd === 'castle' ? 10 : 6, baseR * (p.snd === 'castle' ? 1.6 : 0.8), nt ? '#fff3b0' : null);
 }
 // night halos around the glowing props, and the rainbow in the sky once everything is out (2D, over the picture)
 function drawPropsFx(c) {
   if (!BV || Beach.ov <= 0.01) return;
   const nt = Math.max(night, nightBoost);
   if (nt > 0.02) { c.save(); c.globalCompositeOperation = 'lighter';
-    for (const p of PROPS) { if (!p.glow || p.k <= 0 || !p.rect) continue;
+    for (const p of PROPS) { if (!p.glow || p.k <= 0 || !p.rect) continue;   // (glow belongs to the night form)
       const [x0, y0, x1, y1] = p.rect, cx = (x0 + x1) / 2, cy = y0 + (y1 - y0) * 0.55, R = Math.max(x1 - x0, y1 - y0) * 0.95 * p.glow;
       const a = nt * Math.min(1, p.k * 2) * Beach.ov * (0.26 + 0.07 * Math.sin(T * 2.2 + p.ph));
       const g = c.createRadialGradient(cx, cy, 0, cx, cy, R); g.addColorStop(0, `rgba(255,214,120,${a.toFixed(3)})`); g.addColorStop(0.45, `rgba(255,190,90,${(a * 0.4).toFixed(3)})`); g.addColorStop(1, 'rgba(255,170,60,0)');
