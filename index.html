@@ -1709,13 +1709,13 @@ function arriveBeach() { // everyone jumps for joy on the sand
 
 // ---------- beach props: placed as in the concept painting, each with a day and a night form; one more step for each letter friend on the beach (4 = all) ----------
 // where each picture sits in beach/props.webp
-const PATL = { w: 1024, h: 1024, r: { castle: [10, 10, 512, 503], jar: [532, 10, 276, 300], bucket: [10, 523, 269, 320], shell: [289, 523, 256, 124], starfish: [555, 523, 220, 133], star: [785, 523, 191, 178] } };
+const PATL = { w: 1024, h: 2048, r: { castle: [12, 12, 509, 520], jar: [533, 12, 366, 400], bucket: [12, 544, 285, 384], star: [309, 544, 235, 220], shell: [556, 544, 265, 200], starfish: [12, 940, 240, 170] } };
 // st: step; d / n: day and night picture (the bucket becomes a star jar, shells and starfish become glowing stars, the castle lights up);
 // x, y: where its foot stands in the painting (fraction of the screen; y from the waterline 0.5 down to the bottom 1); leftOf: just left of that button instead of x;
 // hd / hn: height (fraction of the screen's short side); tn: how much the night darkens the night picture; emit: lit windows; glow: night halo
 const PROPS = [
   { st: 1, d: 'bucket', n: 'jar', x: 0.12, y: 0.86, hd: 0.235, hn: 0.25, tn: 0.25, glow: 1.4, snd: 'bucket' },
-  { st: 2, d: 'shell', n: 'star', x: 0.055, y: 0.985, hd: 0.095, hn: 0.12, tn: 0, glow: 1, snd: 'shell' },
+  { st: 2, d: 'shell', n: 'star', x: 0.055, y: 0.985, hd: 0.1, hn: 0.12, tn: 0, glow: 1, snd: 'shell' },
   { st: 2, d: 'starfish', n: 'star', leftOf: '#bWrite', y: 0.985, hd: 0.07, hn: 0.105, tn: 0, glow: 1, snd: 'star' },
   { st: 3, d: 'castle', n: 'castle', x: 0.9, y: 0.57, hd: 0.33, hn: 0.33, tn: 1, emit: 1, snd: 'castle' },
   { st: 4, d: 'starfish', n: 'jar', x: 0.975, y: 0.64, hd: 0.06, hn: 0.15, tn: 0.25, glow: 1.2, snd: 'jar' },
