@@ -1383,8 +1383,13 @@ class Sprite {
     Snd.pour(1); grains(x0, this.y - this.r * 0.5, 30, this.col, 1.1); this.mood = s2.mood = 'giggle'; this.moodT = s2.moodT = 1; this.giggle(0.9, 0, 0.2);
   }
   // path walking
+  // where this sprite can stand (what walls() allows, a little inside)
+  walkBounds() { const r = this.r; return [TX + r * 0.95 + 2, TX + TW - r * 0.95 - 2, TY + this.bodyH * 0.92 + 2, TY + TH - r * 0.3 - 2]; }
   startWalk(pts) {
+    const [x0, x1, y0, y1] = this.walkBounds();
+    for (const q of pts) { q.x = clamp(q.x, x0, x1); q.y = clamp(q.y, y0, y1); }
     this.state = 'walk'; this.walkPts = pts; this.walkI = 0; this.walkPh = 0; this.lastStep = 0; this.walkNote = 0; this.vx = this.vy = 0; this.vz = 0;
+    this.wpx = undefined; this.walkTI = -1; this.walkStall = 0; this.walkStuck = 0;
     this.mood = 'happy'; this.arms(0.4); Snd.whoop(this.voice);
   }
   endWalk(happy) {
@@ -1397,17 +1402,23 @@ class Sprite {
   }
   updateWalk(dt) {
     const M = this.M, pts = this.walkPts; if (!pts) { this.state = 'idle'; return; }
-    const sp = (this.walkSpeed || M.walk) * dt, ox = this.x, oy = this.y; let remain = sp;
+    const sp = (this.walkSpeed || M.walk) * dt; let remain = sp;
+    // how far it really got over the last frame (pushes back from the tray's edge or other sprites included)
+    const net = this.wpx === undefined ? sp : hyp(this.x - this.wpx, this.y - this.wpy); this.wpx = this.x; this.wpy = this.y;
+    // no closer to the next point for a moment: skip past it; held up again and again: stop walking (instead of walking on the spot forever)
+    const waiting = this.followTrace && this.walkI >= pts.length;
+    if (!waiting && this.walkI < pts.length) { const t = pts[this.walkI], dT = hyp(t.x - this.x, t.y - this.y);
+      if (this.walkTI !== this.walkI || dT < this.walkBest - 1) { this.walkTI = this.walkI; this.walkBest = dT; this.walkStall = 0; }
+      else if ((this.walkStall += dt) > 0.3) { this.walkStall = 0;
+        if (++this.walkStuck >= 3) { this.endWalk(false); return; }
+        let j = this.walkI + 1; while (j < pts.length - 1 && hyp(pts[j].x - this.x, pts[j].y - this.y) < this.r * 1.5) j++; this.walkI = j; } }
     while (remain > 0 && this.walkI < pts.length) { const t = pts[this.walkI], dx = t.x - this.x, dy = t.y - this.y, d = hyp(dx, dy);
       if (d <= remain) { this.x = t.x; this.y = t.y; remain -= d; this.walkI++; }
       else { this.x += dx / d * remain; this.y += dy / d * remain; this.lx = dx / d; this.ly = dy / d * 0.5; remain = 0; } }
     if (this.trail) this.trail.idx = this.walkI;
     this.walls(true);
-    // steps (and their sound) only while actually getting somewhere; a point it can't reach (pushed back by the tray's edge
-    // or by other sprites) is skipped after a moment instead of walking on the spot forever
-    const moved = hyp(this.x - ox, this.y - oy), waiting = this.followTrace && this.walkI >= pts.length;
-    if (!waiting && moved < sp * 0.25) { this.walkStall = (this.walkStall || 0) + dt; if (this.walkStall > 0.35) { this.walkStall = 0; this.walkI++; } } else this.walkStall = 0;
-    this.walkPh += dt * M.walk / 36 * Math.min(1, moved / Math.max(1e-3, sp));
+    // steps (and their sound) only while it is actually getting somewhere
+    this.walkPh += dt * M.walk / 36 * Math.min(1, net / Math.max(1e-3, sp));
     if (M.hover) this.z += (24 + 6 * Math.sin(T * 1.7 + this.phase) - this.z) * Math.min(1, dt * 3);
     else this.z = Math.abs(Math.sin(this.walkPh * Math.PI)) * M.bob;
     this.armT = 0.35 + 0.25 * Math.sin(this.walkPh * Math.PI * 2); this.armHold = 0.1;
@@ -2129,6 +2140,7 @@ class LetterFriend extends Sprite {
     if (r < 0.6) { const a = rand(0, TAU), d = rand(40, 140); this.hopTo(clamp(this.x + Math.cos(a) * d, TX + this.gh * 0.6, TX + TW - this.gh * 0.6), clamp(this.y + Math.sin(a) * d * 0.8, TY + this.bodyH, TY + TH - 10), rand(200, 260)); }
     else if (r < 0.8) { this.vz = rand(260, 340); if (Math.random() < 0.3) this.giggle(0.4); }
     else { this.spinV = 10 * (Math.random() < 0.5 ? -1 : 1); } }
+  walkBounds() { const hwx = this.gh * this.mesh.w * 0.5 + 6; return [TX + hwx + 2, TX + TW - hwx - 2, TY + this.bodyH + 2, TY + TH - 10]; }
   walls(held) { const hwx = this.gh * this.mesh.w * 0.5 + 6; const x0 = TX + hwx, x1 = TX + TW - hwx, y0 = TY + this.bodyH, y1 = TY + TH - 8; let hit = 0;
     if (this.x < x0) { this.x = x0; if (this.vx < 0) { hit = -this.vx; this.vx *= -0.7; } } if (this.x > x1) { this.x = x1; if (this.vx > 0) { hit = this.vx; this.vx *= -0.7; } }
     if (this.y < y0) { this.y = y0; if (this.vy < 0) { hit = Math.max(hit, -this.vy); this.vy *= -0.7; } } if (this.y > y1) { this.y = y1; if (this.vy > 0) { hit = Math.max(hit, this.vy); this.vy *= -0.7; } }
@@ -2527,8 +2539,7 @@ function assignPath(pts) {
   for (const s of sprites) { if (s.state !== 'idle' || s.ptr || s.pressing || s.pile || s.popped || s.castle || s.walkCD > 0 || (!s.M.hover && s.z > 30)) continue;
     const d0 = hyp(s.x - a.x, s.y - a.y), d1 = hyp(s.x - z.x, s.y - z.y); if (d0 < bd) { bd = d0; best = s; rev = false; } if (d1 < bd) { bd = d1; best = s; rev = true; } }
   if (!best) return;
-  const r = best.r, x0 = TX + r, x1 = TX + TW - r, y0 = TY + best.bodyH * 0.95, y1 = TY + TH - r * 0.35;
-  const path = (rev ? pts.slice().reverse() : pts.slice()).map(q => ({ x: clamp(q.x, x0, x1), y: clamp(q.y, y0, y1) })), tr = { pts: path, idx: 0, done: false, fade: 1 };
+  const path = (rev ? pts.slice().reverse() : pts.slice()).map(q => ({ x: q.x, y: q.y })), tr = { pts: path, idx: 0, done: false, fade: 1 };   // startWalk keeps it where the sprite can stand
   trails.push(tr); best.trail = tr; best.startWalk(path);
 }
 function drawTrails(c, dt) {
