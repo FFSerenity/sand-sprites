@@ -1690,7 +1690,7 @@ const whirls = [];
 function addWhirl(x, y, Rpx, spd, life, sink) { whirls.push({ x, y, R: Rpx, spd, life, max: life, sink }); }
 function updateWhirls(dt) { for (let i = whirls.length - 1; i >= 0; i--) { const w = whirls[i]; w.life -= dt; if (w.life <= 0) { whirls.splice(i, 1); continue; } const k = w.life / w.max, g = toGrid(w.x, w.y); whirlStamp(g[0], g[1], w.R / cellPx(), w.spd * k * dt * 60, 0.012, w.sink * k * dt * 60); } }
 let wave = null;
-function startWave() { if (wave) return; wave = { t: 0, dur: BV > 0.5 ? 2.0 : 1.6, seed: Math.random() * 10, front: -0.15, hit: new Set(), ax: BV > 0.5 ? 'y' : 'x' }; Snd.wave(); for (const s of sprites) if (s.state === 'peek') { s.state = 'sink'; s.st = 0; } }
+function startWave() { if (wave) return; finishSandAnim(); Hide.saved = Hide.fresh = null; wave = { t: 0, dur: BV > 0.5 ? 2.0 : 1.6, seed: Math.random() * 10, front: -0.15, hit: new Set(), ax: BV > 0.5 ? 'y' : 'x' }; Snd.wave(); for (const s of sprites) if (s.state === 'peek') { s.state = 'sink'; s.st = 0; } }
 function updateWave(dt) {
   if (!wave) return; wave.t += dt; wave.front = -0.15 + 1.35 * (wave.t / wave.dur);
   // the front moves along x (left to right) on the tray, along y (from the sea to the front) on the beach
@@ -2045,7 +2045,7 @@ function updateBeach(dt) {
   Beach.ov = smooth01((Beach.v - 0.72) / 0.28);
   if (Beach.ov > 0 && !Beach.snapped && gl) { takeSnap(); Beach.snapped = true; }
   if (Beach.tgt && Beach.v >= 1 && !Beach.arrived) { Beach.arrived = true; arriveBeach(); }
-  if (!Beach.tgt && Beach.v <= 0 && was > 0) { Beach.arrived = false; Beach.snapped = false; wave = wave && wave.ax === 'y' ? null : wave; const f = Beach.then; Beach.then = null; if (f) f(); }
+  if (!Beach.tgt && Beach.v <= 0 && was > 0) { if (!Trace.active) sandShow(); Beach.arrived = false; Beach.snapped = false; wave = wave && wave.ax === 'y' ? null : wave; const f = Beach.then; Beach.then = null; if (f) f(); }
   updateVideo(dt);
   if (!BV) return;
   // waves in the video: where they reach right now; sprites near the water run away when one comes in
@@ -2352,12 +2352,12 @@ function screenStroke(st, L, sp) {
 let traceCount = 0;
 function startTrace(id) {
   if (Beach.tgt || Beach.v > 0) { closePicker(); closeBook(); leaveBeach(() => startTrace(id)); return; }
-  if (Trace.active) endTrace(false);
+  if (Trace.active) endTrace(false, true);
   closePicker(); closeBook();
   const g = GLYPHS[id], L = glyphLayout(g);
   Object.assign(Trace, { mk: null, lost: 0, active: true, id, g, L, si: -1, phase: 'intro', rt: 0, events: [], tol: Math.max(36, L.gh * 0.1), guide: null, flash: 0, lastTick: 0,
     strokes: g.s.map(st => ({ pts: screenStroke(st, L, 12), maxLit: -1, litN: 0, done: false, lit: [] })) });
-  ttx.classList.add('show'); traceCount++;
+  ttx.classList.add('show'); traceCount++; sandHide();
   for (const s of sprites) if (s.state === 'peek') { s.state = 'sink'; s.st = 0; }
   clearBox();
   Snd.magic();
@@ -2436,8 +2436,35 @@ function complete() {
     Book.addFriend(id); });
   ev(fT + 1.6, () => { Snd.chimes([1568, 2093], 0.08, 0.08); endTrace(true); });
 }
-function endTrace(done) {
+// ---------- writing mode: her earlier marks in the sand step aside, and come back afterwards ----------
+// on starting to write, the sand fades to fresh sand (the old letters and scribbles are kept aside); when writing is over
+// (cancelled, or back from the beach) they fade back in, with whatever she has drawn since laid on top
+const Hide = { saved: null, fresh: null, from: null, to: null, k: 1 };
+const sandCopy = () => ({ h: hA.slice(), r: rA.slice(), g: gA.slice(), b: bA.slice(), GW, GH });
+function sandFresh() { const N = GW * GH, f = { h: new Float32Array(N), r: new Float32Array(N), g: new Float32Array(N), b: new Float32Array(N), GW, GH };
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { const i = y * GW + x, u = (x + 0.5) / GW, v = (y + 0.5) / GH, c = freshColor(u, v, seed); f.r[i] = c[0]; f.g[i] = c[1]; f.b[i] = c[2]; f.h[i] = baseH(u, v, seed); }
+  return f; }
+function applySand(e) { const A = Hide.from, B = Hide.to; if (!A || A.GW !== GW || A.GH !== GH) return;
+  for (let i = 0, N = GW * GH; i < N; i++) { hA[i] = A.h[i] + (B.h[i] - A.h[i]) * e; rA[i] = A.r[i] + (B.r[i] - A.r[i]) * e; gA[i] = A.g[i] + (B.g[i] - A.g[i]) * e; bA[i] = A.b[i] + (B.b[i] - A.b[i]) * e; } }
+function finishSandAnim() { if (Hide.to && Hide.k < 1) applySand(1); Hide.k = 1; Hide.from = Hide.to = null; }
+function sandHide() {
+  if (!hA) return; finishSandAnim(); if (Hide.saved) return;
+  Hide.saved = sandCopy(); Hide.fresh = sandFresh(); Hide.from = Hide.saved; Hide.to = Hide.fresh; Hide.k = 0;
+}
+function sandShow() {
+  finishSandAnim(); const S = Hide.saved, F = Hide.fresh; Hide.saved = Hide.fresh = null;
+  if (!S || S.GW !== GW || S.GH !== GH) return;
+  const cur = sandCopy(), N = GW * GH, to = { h: new Float32Array(N), r: new Float32Array(N), g: new Float32Array(N), b: new Float32Array(N), GW, GH };
+  for (let i = 0; i < N; i++) {   // the old sand, plus every change made to the fresh sand since (her letter, new drawings, paint)
+    to.h[i] = S.h[i] + (cur.h[i] - F.h[i]);
+    const w = clamp((Math.abs(cur.r[i] - F.r[i]) + Math.abs(cur.g[i] - F.g[i]) + Math.abs(cur.b[i] - F.b[i]) - 0.015) / 0.04, 0, 1);
+    to.r[i] = S.r[i] + (cur.r[i] - S.r[i]) * w; to.g[i] = S.g[i] + (cur.g[i] - S.g[i]) * w; to.b[i] = S.b[i] + (cur.b[i] - S.b[i]) * w; }
+  Hide.from = cur; Hide.to = to; Hide.k = 0;
+}
+function updateSandHide(dt) { if (!Hide.to) return; Hide.k = Math.min(1, Hide.k + dt / 0.45); applySand(smooth01(Hide.k)); if (Hide.k >= 1) Hide.from = Hide.to = null; }
+function endTrace(done, keepHidden) {
   if (!Trace.active) return;
+  if (!done && !keepHidden) sandShow();   // after a finished letter they come back when she leaves the beach
   const g = Trace.guide; if (g) { g.followTrace = false; if (g.demoWalk) { g.demoWalk = false; if (g.state === 'walk') g.endWalk(false); } g.walkSpeed = 0; }
   if (done) Trace.after = { strokes: Trace.strokes, t: 0 };
   Trace.active = false; Trace.events = []; Trace.morph = 0; ttx.classList.remove('show');
@@ -2922,7 +2949,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const rawMs = now - last; let dt = rawMs / 1000; last = now; perfTick(rawMs); if (dt > 0.05) dt = 0.05; if (dt <= 0) return; T += dt;
   const pf = PROF.on; let q0 = pf ? performance.now() : 0; const mark = pf ? k => { const q = performance.now(); PROF.acc[k] = (PROF.acc[k] || 0) + q - q0; PROF.mx[k] = Math.max(PROF.mx[k] || 0, q - q0); q0 = q; } : null;
-  updateBeach(dt); updateProps(dt); updBusy(); updatePointers(dt); updateWhirls(dt); updateWave(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
+  updateBeach(dt); updateProps(dt); updateSandHide(dt); updBusy(); updatePointers(dt); updateWhirls(dt); updateWave(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
   if (pf) mark('misc');
   for (const s of sprites) s.update(dt);
   if (pf) mark('sprites');
@@ -2971,7 +2998,7 @@ if (initGL()) {
   for (const id of Book.data.f.slice()) if (GLYPHS[id]) { const p = randSpot(); spawnFriend(id, p.x, p.y, false); }
   requestAnimationFrame(t => { last = t; requestAnimationFrame(loop); });
 }
-window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, BVID, Props, PROPS, Sea, addDolphin, addFirework, hitProp, assignPath, unproj: (X, Y) => UNPJ(X, Y), get night() { return night; }, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
+window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, BVID, Props, PROPS, Sea, Hide, addDolphin, addFirework, hitProp, assignPath, unproj: (X, Y) => UNPJ(X, Y), get night() { return night; }, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
 try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 })();
 </script>
