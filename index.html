@@ -23,6 +23,7 @@ body{position:fixed;inset:0}
   linear-gradient(180deg,#a8744a,#86552f 45%,#6d4024)}
 #frame.night{filter:brightness(.42) saturate(.75) hue-rotate(-12deg)}
 #gl{position:fixed;left:0;top:0}
+.bgv{position:fixed;left:0;top:0;opacity:0;pointer-events:none;object-fit:fill;background:transparent}
 #tray{position:fixed;border-radius:12px;pointer-events:none;box-shadow:inset 0 7px 16px rgba(50,20,5,.5),inset 0 -3px 10px rgba(50,20,5,.28),inset 6px 0 12px rgba(50,20,5,.22),inset -6px 0 12px rgba(50,20,5,.22),0 0 0 2px rgba(40,15,0,.45),0 0 0 5px rgba(255,220,170,.12)}
 #fx{position:fixed;left:0;top:0;touch-action:none}
 #ui{position:fixed;inset:0;pointer-events:none}
@@ -90,6 +91,8 @@ body{position:fixed;inset:0}
 <body>
 <div id="probe"></div>
 <div id="frame"></div>
+<video id="bgv0" class="bgv" muted playsinline preload="auto"></video>
+<video id="bgv1" class="bgv" muted playsinline preload="auto"></video>
 <canvas id="gl"></canvas>
 <div id="tray"></div>
 <canvas id="fx"></canvas>
@@ -304,20 +307,25 @@ function fillTex() {
 // ---------- beach camera: the tray tilts back into a sloping beach in front of the sea ----------
 // Everything still lives on the flat tray ("world", css px). The camera is a projective map of the tray plane;
 // at BV = 0 it is exactly the old top-down view. Sprites and floating effects are drawn upright around a ground point.
-const BG_ASP = 1672 / 466, BG_SHORE = 0.80;   // picture aspect; where the sand starts in the picture (fraction of its height)
-const Beach = { v: 0, tgt: 0, t: 0, ys: 0, front: 0, wet: 0, reach: 0, arrived: false, then: null, cyc: -1, rising: false };
+// the beach picture / video is 16:9; its horizon and the back edge of the playable sand (the waterline), as fractions of its height
+const PIC = { asp: 16 / 9, hor: 0.445, far: 0.72 };
+const Beach = { v: 0, tgt: 0, ov: 0, snapped: false, front: -1, frontF: 0, rising: false, washCD: 0, arrived: false, then: null, letter: null };
 const CAM = { yN: 0, yF: 0, D: 0, sx: 1, cxW: 0, cxS: 0, img: [0, 0, 1, 1] };
 let BV = 0, PX = 0, PY = 0, PK = 1, PV = 1;
 // upright things are drawn a bit bigger on the beach (the camera is closer)
 const SB = () => 1 + 0.25 * BV;
+let vidRect = '';
 function camUpdate() {
   const e = BV, cxW = TX + TW / 2;
-  // far edge ~70% as wide as the near edge; the ground looks tilted ~32° at the front and ~53° at the back
-  const D1 = 1 / 0.7 - 1, yN1 = H + 6, yF1 = yN1 - 0.85 * TH / (1 + D1), sh = BG_SHORE + 0.03;
-  const ih = Math.max(W / BG_ASP, yF1 / sh), iw = ih * BG_ASP;
-  CAM.img = [(W - iw) / 2, yF1 - sh * ih, iw, ih];
-  CAM.yN = TY + TH + (yN1 - TY - TH) * e; CAM.yF = TY + (yF1 - TY) * e; CAM.D = D1 * e; CAM.sx = 1; CAM.cxW = cxW; CAM.cxS = cxW + (W / 2 - cxW) * e;
-  Beach.ys = CAM.img[1] + CAM.img[3] * (BG_SHORE - 0.035); Beach.reach = (yN1 - yF1) * 0.17 + ih * 0.06;
+  // the picture covers the screen: centred when it is wider than the screen, bottom-aligned when taller (the beach stays in view)
+  let iw = W, ih = W / PIC.asp; if (ih < H) { ih = H; iw = H * PIC.asp; }
+  const ix = (W - iw) / 2, iy = H - ih; CAM.img = [ix, iy, iw, ih];
+  // the tray plane lies on the picture's sand: back edge on the waterline, front edge at the bottom of the screen and as wide as it,
+  // sides running to the picture's vanishing point on the horizon (so sprites shrink with distance the way the picture does)
+  const hY = iy + PIC.hor * ih, yF1 = iy + PIC.far * ih, yN1 = H + 4, D1 = (yN1 - yF1) / (yF1 - hY), sx1 = W / TW;
+  CAM.yN = TY + TH + (yN1 - TY - TH) * e; CAM.yF = TY + (yF1 - TY) * e; CAM.D = D1 * e; CAM.sx = 1 + (sx1 - 1) * e; CAM.cxW = cxW; CAM.cxS = cxW + (W / 2 - cxW) * e;
+  const r = `${ix}|${iy}|${iw}|${ih}`;
+  if (r !== vidRect && typeof BVID !== 'undefined') { vidRect = r; for (const v of BVID.el) Object.assign(v.style, { left: ix + 'px', top: iy + 'px', width: iw + 'px', height: ih + 'px' }); }
 }
 // tray point -> screen: PX, PY; PK = size of upright things there (and horizontal ground scale), PV = vertical ground scale
 function PJ(x, y) {
@@ -353,7 +361,7 @@ uniform float uTime; uniform float uNight; uniform float uPx; uniform float uAsp
 uniform vec4 uTray; uniform vec2 uRes;
 // beach view: uPj = (near edge y, far edge y, depth D, width scale), uPc = (tray centre x, screen centre x), uBV = how far the camera has tilted
 uniform vec4 uPj; uniform vec2 uPc; uniform float uBV; uniform sampler2D uBgD; uniform sampler2D uBgN; uniform vec4 uImg; uniform float uImgOK;
-uniform vec4 uWash; uniform vec4 uWv;
+uniform vec4 uWv; uniform sampler2D uS; uniform float uOv; uniform float uVid;
 const vec3 LIGHT = vec3(-0.4511, -0.5514, 0.7018);
 float hash(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
 vec2 cssOf(vec2 fc){ return vec2(fc.x, uRes.y - fc.y) / uDpr; }
@@ -384,64 +392,37 @@ vec2 unproj(vec2 s){
   float z=1.0+uPj.z*w;
   return vec2(uPc.x+(s.x-uPc.y)*z/uPj.w, uTray.y+uTray.w*(1.0-w));
 }
-// on the beach the tray is a patch of rainbow sand whose edges fade into the beach
+// on the beach the sand tray fades into the picture's rainbow sand: its edges fade out, and once there (uOv = 1)
+// only what she changes after arriving stays drawn (furrows, paint, footprints), compared with a snapshot (uS)
 float softMask(vec2 w){ vec2 uv=(w-uTray.xy)/uTray.zw;
-  return smoothstep(0.0,90.0,min(uv.x,1.0-uv.x)*uTray.z)*smoothstep(0.0,50.0,uv.y*uTray.w)*step(0.0,1.0-uv.y); }
-// sea water washing up the beach and back (uWash = shoreline y, wave front y, wet line y, strength), all in screen px
-vec3 washOver(vec2 c, vec3 col){
-  if (uWash.w <= 0.001) return col;
-  float d=c.y-uWash.x;
-  float fr=uWash.y+(5.0*sin(c.x*0.021+uTime*1.3)+3.0*sin(c.x*0.053-uTime*0.8))*(0.35+0.65*clamp((uWash.y-uWash.x)/30.0,0.0,1.0));
-  if (c.y<fr){
-    float t=clamp(d/max(fr-uWash.x,1.0),0.0,1.0);
-    vec3 wc=mix(vec3(0.20,0.72,0.86),vec3(0.60,0.93,0.97),t);
-    wc=mix(wc,wc*vec3(.32,.40,.78),uNight*0.85);
-    float ca=sin(c.x*0.09+uTime*2.0+sin(c.y*0.13-uTime*1.4)*2.0)*0.5+0.5;
-    col=mix(col,wc+ca*0.07,(0.66-0.36*t)*smoothstep(-16.0,8.0,d)*uWash.w);
-    float fm=smoothstep(fr-9.0,fr-2.5,c.y)*(0.7+0.3*hash(floor(c*0.5)));
-    col=mix(col,mix(vec3(1.0),vec3(.72,.78,1.0),uNight*0.6),fm*0.85*uWash.w*smoothstep(-6.0,10.0,d));
-  } else {
-    float wet=smoothstep(uWash.z+4.0,uWash.z-12.0,c.y)*smoothstep(fr,fr+6.0,c.y);
-    col*=1.0-0.17*wet*uWash.w;
-  }
-  return col;
-}
+  return smoothstep(0.0,90.0,min(uv.x,1.0-uv.x)*uTray.z)*smoothstep(0.0,40.0,uv.y*uTray.w)*step(0.0,1.0-uv.y); }
+float markK(vec2 w){ vec2 uv=clamp((w-uTray.xy)/uTray.zw,0.0,1.0); vec4 A=texture2D(uA,uv), S=texture2D(uS,uv);
+  return clamp(abs(A.a-S.a)*22.0+length(A.rgb-S.rgb)*4.5-0.08,0.0,1.0); }
 // the Smooth button on the beach: a big sea wave sweeps from the water to the front (uWv.x = front, along the tray depth)
-vec3 seaWave(vec2 s, vec3 col){
-  if (uWv.w <= 0.0) return col;
+// returns premultiplied colour + alpha so it can be laid over the background video
+vec4 seaWaveA(vec2 s){
+  if (uWv.w <= 0.0) return vec4(0.0);
   vec2 c = unproj(s); float v = (c.y - uTray.y)/uTray.w, dd = uWv.x - v + 0.006*sin(c.x*0.03 + uTime*4.0);
-  if (dd < -0.02 || dd > 0.34 || v < -0.05) return col;
+  if (dd < -0.02 || dd > 0.34 || v < -0.05) return vec4(0.0);
   float k = smoothstep(0.34, 0.03, dd) * smoothstep(-0.05, 0.02, v);
   vec3 wc = mix(vec3(0.25,0.78,0.9), vec3(0.6,0.93,0.98), k); wc = mix(wc, wc*vec3(.35,.42,.78), uNight*0.85);
-  col = mix(col, wc + 0.06*sin(c.x*0.05 + uTime*3.0 + dd*40.0), 0.5*k*uWv.w);
-  return mix(col, mix(vec3(1.0), vec3(.75,.8,1.0), uNight*0.6), smoothstep(0.022, 0.004, abs(dd - 0.01))*0.8*uWv.w*smoothstep(-0.05, 0.0, v));
+  wc += 0.06*sin(c.x*0.05 + uTime*3.0 + dd*40.0);
+  float a = 0.5*k*uWv.w, f = smoothstep(0.022, 0.004, abs(dd - 0.01))*0.8*uWv.w*smoothstep(-0.05, 0.0, v);
+  vec3 fc = mix(vec3(1.0), vec3(.75,.8,1.0), uNight*0.6);
+  return vec4(wc*a*(1.0-f) + fc*f, a*(1.0-f) + f);
 }
-// the far background: sky, sea and islands from the picture (gently animated), plain beach sand below it
+// the beach picture (a still of the background video), day and night
 vec3 bgAt(vec2 c){
-  vec2 uv=(c-uImg.xy)/uImg.zw; vec3 col;
-  if (uImgOK>0.5){
-    float sea=smoothstep(0.475,0.50,uv.y)*(1.0-smoothstep(0.70,0.79,uv.y))*smoothstep(0.03,0.16,uv.x)*(1.0-smoothstep(0.84,0.97,uv.x));
-    vec2 q=uv;
-    q.x+=sea*0.0016*sin(uv.y*240.0-uTime*1.7+sin(uv.x*28.0)*1.6);
-    q.y+=sea*0.0011*sin(uv.x*85.0+uTime*1.2+uv.y*130.0);
-    q=clamp(q,vec2(0.001),vec2(0.999));
-    col=mix(texture2D(uBgD,q).rgb,texture2D(uBgN,q).rgb,uNight);
-    col+=sea*0.035*smoothstep(0.6,1.0,sin(uv.y*160.0-uTime*1.3+sin(uv.x*9.0)*2.0))*(1.0-0.5*uNight);
-    vec2 gq=floor(vec2(uv.x*520.0,uv.y*190.0));
-    col+=sea*step(0.986,hash(gq))*pow(max(0.0,sin(uTime*(2.0+hash(gq+3.1)*3.0)+hash(gq)*50.0)),12.0)*0.8;
-  } else {
-    col=uv.y<0.476?mix(vec3(.2,.55,.97),vec3(.65,.85,.99),uv.y/0.476):mix(vec3(.05,.5,.85),vec3(.3,.8,.85),(uv.y-0.476)/0.35);
-    col=mix(col,col*vec3(.25,.3,.6),uNight*0.8);
-  }
-  vec3 fill=mix(vec3(.973,.792,.643),vec3(.62,.47,.55),uNight)*(0.95+0.08*hash(floor(c*uDpr/uPx)));
-  float below=uImgOK>0.5?smoothstep(0.86,0.995,uv.y):smoothstep(0.80,0.83,uv.y);
-  return seaWave(c, washOver(c,mix(col,fill,below)));
+  vec2 uv=clamp((c-uImg.xy)/uImg.zw,vec2(0.001),vec2(0.999));
+  if (uImgOK<0.5){ vec3 col=uv.y<0.445?mix(vec3(.2,.55,.97),vec3(.65,.85,.99),uv.y/0.445):(uv.y<0.7?mix(vec3(.05,.5,.85),vec3(.3,.8,.85),(uv.y-0.445)/0.26):vec3(.97,.8,.66));
+    return mix(col,col*vec3(.25,.3,.6),uNight*0.8); }
+  return mix(texture2D(uBgD,uv).rgb,texture2D(uBgN,uv).rgb,uNight);
 }
-// what is behind a see-through sprite: the sand under it (top-down) or, on the beach, the sand patch or the background
+// what is behind a see-through sprite: the sand under it (top-down) or, on the beach, the sand patch or the picture
 vec3 sceneAt(vec2 s){
   if (uBV<0.001) return sandAt(s);
-  vec2 w=unproj(s); float m=mix(1.0,softMask(w),uBV);
-  vec3 sd=washOver(s,sandAt(w));
+  vec2 w=unproj(s); float m=mix(1.0,softMask(w),uBV)*(1.0-uOv*(1.0-markK(w)));
+  vec3 sd=sandAt(w);
   return m>0.999?sd:mix(bgAt(s),sd,m);
 }
 `;
@@ -455,13 +436,15 @@ void main(){
   float sd = length(max(d,0.0)) + min(max(d.x,d.y),0.0) - 12.0;
   float m = clamp(0.5 - sd*uDpr, 0.0, 1.0);
   if (uBV > 0.0) m = mix(m, softMask(c), uBV);
+  if (uOv > 0.0) m *= mix(1.0, markK(c), uOv);
   if (m <= 0.0) discard;
-  vec3 col = sandAt(c);
-  if (uBV > 0.0) col = seaWave(s, washOver(s, col));
-  gl_FragColor = vec4(col*m, m);
+  gl_FragColor = vec4(sandAt(c)*m, m);
 }`;
+// the still picture under everything while the camera tilts (and instead of the video until it plays)
 const FS_BG = `
-void main(){ vec2 c = cssOf(gl_FragCoord.xy); float a = smoothstep(0.0, 0.55, uBV); gl_FragColor = vec4(bgAt(c)*a, a); }`;
+void main(){ vec2 c = cssOf(gl_FragCoord.xy); float a = smoothstep(0.0, 0.55, uBV)*(1.0-uVid); if (a <= 0.001) discard; gl_FragColor = vec4(bgAt(c)*a, a); }`;
+const FS_WAVE = `
+void main(){ vec4 w = seaWaveA(cssOf(gl_FragCoord.xy)); if (w.a <= 0.001) discard; gl_FragColor = w; }`;
 const VS_SH = `attribute vec2 aPos;attribute vec2 aB;attribute vec4 aC;uniform vec2 uView;varying vec2 vL;varying vec4 vC;
 void main(){vL=aB;vC=aC;gl_Position=vec4(aPos.x/uView.x*2.-1.,1.-aPos.y/uView.y*2.,0.,1.);}`;
 const FS_SH = `precision mediump float;varying vec2 vL;varying vec4 vC;
@@ -649,8 +632,8 @@ void main(){
   gl_FragColor = vec4((col * alpha + spec) * mask, mask * alpha);
 }`;
 
-let faceFrame = 0, gl = null, progSand, progBg, progSh, progSp, glTexBg = [], bufTri, bufSh, bufSp, ibSp, glTexA, glTexB, glTexFace, texW = 0, texH = 0, faceTexInit = false;
-const US = {}, UBG = {}, USH = {}, USP = {};
+let faceFrame = 0, gl = null, progSand, progBg, progWave, glTexS = null, progSh, progSp, glTexBg = [], bufTri, bufSh, bufSp, ibSp, glTexA, glTexB, glTexFace, texW = 0, texH = 0, faceTexInit = false;
+const US = {}, UBG = {}, UWV = {}, USH = {}, USP = {};
 function mkProg(vs, fs, U, names) {
   const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o)); return o; };
   const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
@@ -659,7 +642,7 @@ function mkProg(vs, fs, U, names) {
   for (const n of names) U[n] = gl.getUniformLocation(p, n);
   return p;
 }
-const COMMON_U = ['uA', 'uB', 'uTime', 'uNight', 'uPx', 'uAsp', 'uDpr', 'uTray', 'uRes', 'uPj', 'uPc', 'uBV', 'uBgD', 'uBgN', 'uImg', 'uImgOK', 'uWash', 'uWv'];
+const COMMON_U = ['uA', 'uB', 'uTime', 'uNight', 'uPx', 'uAsp', 'uDpr', 'uTray', 'uRes', 'uPj', 'uPc', 'uBV', 'uBgD', 'uBgN', 'uImg', 'uImgOK', 'uWv', 'uS', 'uOv', 'uVid'];
 const NB = 48, RINGS = [0.3, 0.55, 0.75, 0.9, 1.0], NR = RINGS.length, NV = 1 + NB * NR;
 let spAll = new Float32Array(Math.max(NV, 6000) * 6 * 8);
 let shBuf = new Float32Array(48 * 24);
@@ -669,6 +652,7 @@ function initGL() {
   const deriv = !!gl.getExtension('OES_standard_derivatives');
   progSand = mkProg(VS_TRI, COMMON + FS_SAND, US, COMMON_U);
   progBg = mkProg(VS_TRI, COMMON + FS_BG, UBG, COMMON_U);
+  progWave = mkProg(VS_TRI, COMMON + FS_WAVE, UWV, COMMON_U);
   progSh = mkProg(VS_SH, FS_SH, USH, ['uView']);
   progSp = mkProg(VS_SP, (deriv ? '#extension GL_OES_standard_derivatives : enable\n' : '#define NO_DERIV\n') + COMMON + FS_SP, USP,
     COMMON_U.concat(['uView', 'uBB', 'uBK', 'uCol', 'uMat', 'uDents', 'uSlot', 'uFace', 'uR', 'uClip', 'uFaceOn', 'uP', 'uSeed', 'uCols', 'uNCol']));
@@ -683,7 +667,7 @@ function initGL() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; };
   glTexA = mk(); glTexB = mk(); glTexFace = mk(); texW = texH = 0; faceTexInit = false;
-  glTexBg = [mk(), mk()]; upBg(0); upBg(1);
+  glTexBg = [mk(), mk()]; upBg(0); upBg(1); glTexS = mk(); upSnap();
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   return true;
 }
@@ -695,14 +679,19 @@ function setCommon(U) {
   gl.uniform1f(U.uAsp, TW / TH); gl.uniform1f(U.uDpr, RS); gl.uniform4f(U.uTray, TX, TY, TW, TH); gl.uniform2f(U.uRes, glc.width, glc.height);
   gl.uniform4f(U.uPj, CAM.yN, CAM.yF, CAM.D, CAM.sx); gl.uniform2f(U.uPc, CAM.cxW, CAM.cxS); gl.uniform1f(U.uBV, BV);
   gl.uniform1i(U.uBgD, 3); gl.uniform1i(U.uBgN, 4); gl.uniform4f(U.uImg, CAM.img[0], CAM.img[1], CAM.img[2], CAM.img[3]); gl.uniform1f(U.uImgOK, bgReady >= 2 ? 1 : 0);
-  gl.uniform4f(U.uWash, Beach.ys, Beach.front, Beach.wet, BV > 0.6 ? (BV - 0.6) / 0.4 : 0);
+  gl.uniform1i(U.uS, 5); gl.uniform1f(U.uOv, Beach.ov); gl.uniform1f(U.uVid, BVID.vis);
   const wy = wave && wave.ax === 'y'; gl.uniform4f(U.uWv, wy ? wave.front : 0, 0, 0, wy ? 1 : 0);
 }
 // background pictures (day and night share one layout)
 const BGI = [new Image(), new Image()]; let bgReady = 0;
 function upBg(i) { if (!gl || !glTexBg[i] || !BGI[i].complete || !BGI[i].naturalWidth) return;
   gl.activeTexture(gl.TEXTURE3 + i); gl.bindTexture(gl.TEXTURE_2D, glTexBg[i]); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, BGI[i]); }
-BGI.forEach((im, i) => { im.onload = () => { bgReady++; upBg(i); }; im.src = i ? 'bg-night.jpg' : 'bg-day.jpg'; });
+BGI.forEach((im, i) => { im.onload = () => { bgReady++; upBg(i); }; im.src = i ? 'beach/night.jpg' : 'beach/day.jpg'; });
+// snapshot of the sand (colour + height) taken on arriving at the beach: afterwards only changes since then are drawn over the picture
+let snapA8 = null, snapW = 0, snapH = 0;
+function takeSnap() { fillTex(); snapA8 = texA8.slice(); snapW = GW; snapH = GH; upSnap(); }
+function upSnap() { if (!gl || !glTexS || !snapA8) return; gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, glTexS);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, snapW, snapH, 0, gl.RGBA, gl.UNSIGNED_BYTE, snapA8); }
 
 // ---------- face atlas: faces are drawn in 2D, then mapped onto the soft body so they squish with it ----------
 const SLOT = 160, SLOTS_X = 6, ATLAS = SLOT * SLOTS_X;
@@ -737,8 +726,11 @@ function renderGL() {
   // beach background (only while the camera is tilted)
   if (BV > 0) { gl.useProgram(progBg); setCommon(UBG); gl.bindBuffer(gl.ARRAY_BUFFER, bufTri); attribs(1); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLES, 0, 3); }
   // sand
+  if (Beach.ov > 0 && (snapW !== GW || snapH !== GH)) takeSnap();
   gl.useProgram(progSand); setCommon(US);
   gl.bindBuffer(gl.ARRAY_BUFFER, bufTri); attribs(1); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  // the Smooth sea wave on the beach, over the sand and the background
+  if (BV > 0 && wave && wave.ax === 'y') { gl.useProgram(progWave); setCommon(UWV); gl.drawArrays(gl.TRIANGLES, 0, 3); }
   // shadows
   const order = sprites.filter(s => s.e > 0.001 && !s.popped && s.state !== 'caught').sort((a, b) => a.y - b.y);
   let n = 0; const need = order.length * 2 * 48; if (shBuf.length < need) shBuf = new Float32Array(need);
@@ -1652,22 +1644,25 @@ function updateWave(dt) {
   const f = wave.front, bw = 0.12, k = 1 - Math.pow(0.6, dt * 60), Y = wave.ax === 'y', N = Y ? GH : GW, M = Y ? GW : GH;
   const a0 = Math.max(0, Math.floor((f - bw) * N)), a1 = Math.min(N - 1, Math.ceil(f * N + 3));
   for (let a = a0; a <= a1; a++) { const ua = (a + 0.5) / N; if (ua > f + 0.01) continue; const crest = 0.22 * Math.exp(-(((ua - f) / 0.025) ** 2));
-    for (let b = 0; b < M; b++) { const x = Y ? b : a, y = Y ? a : b, i = y * GW + x, u = (x + 0.5) / GW, v = (y + 0.5) / GH, c = freshColor(u, v, wave.seed);
-      rA[i] += (c[0] - rA[i]) * k; gA[i] += (c[1] - gA[i]) * k; bA[i] += (c[2] - bA[i]) * k; hA[i] += (baseH(u, v, wave.seed) + crest - hA[i]) * k; dA[i] *= 1 - k * 0.5; } }
+    // on the beach the wave washes the sand back to how it was on arriving (her marks go, the picture's sand shows again)
+    const back = Y && snapA8 && snapW === GW && snapH === GH && Beach.ov > 0;
+    for (let b = 0; b < M; b++) { const x = Y ? b : a, y = Y ? a : b, i = y * GW + x, u = (x + 0.5) / GW, v = (y + 0.5) / GH;
+      let c, h; if (back) { const j = i * 4; c = [snapA8[j] / 255, snapA8[j + 1] / 255, snapA8[j + 2] / 255]; h = snapA8[j + 3] / 255; } else { c = freshColor(u, v, wave.seed); h = baseH(u, v, wave.seed); }
+      rA[i] += (c[0] - rA[i]) * k; gA[i] += (c[1] - gA[i]) * k; bA[i] += (c[2] - bA[i]) * k; hA[i] += (h + (back ? 0 : crest) - hA[i]) * k; dA[i] *= 1 - k * 0.5; } }
   const fxp = TX + f * TW, fyp = TY + f * TH;
   if (f > 0 && f < 1) for (let i = 0; i < 3; i++) Y ? sparks(TX + rand(0, TW), fyp, 1, 6) : sparks(fxp, TY + rand(0, TH), 1, 6);
   for (const s of sprites) if (!wave.hit.has(s) && (Y ? s.y < fyp : s.x < fxp) && (s.state === 'idle' || s.state === 'fly') && !s.ptr && !s.pile && !s.popped && !s.castle) {
     wave.hit.add(s); if (!s.M.hover) s.vz = rand(300, 400); if (Y) s.vy += 160; else s.vx += 140; s.state = 'fly'; s.mood = 'giggle'; s.moodT = 1; s.arms(1); if (thr('wg', 180)) s.giggle(0.7); }
-  if (wave.t >= wave.dur) { seed = wave.seed; wave = null; }
+  if (wave.t >= wave.dur) { if (wave.ax !== 'y') seed = wave.seed; wave = null; }
 }
 
 // ---------- beach mode: entered after writing a letter; play there until the 🏠 button ----------
 const homeBtn = $('#bHome');
-const hash01 = n => { const v = Math.sin(n * 12.9898 + 4.1) * 43758.5453; return v - Math.floor(v); };
 function enterBeach() {
   if (Beach.tgt) return;
-  Beach.tgt = 1; Beach.arrived = false; Beach.then = null; Beach.t = 7.5 * 0.86; Beach.wet = 0; Beach.cyc = -1;
+  Beach.tgt = 1; Beach.arrived = false; Beach.then = null;
   magic = null; closePicker(); Snd.whoosh(false); homeBtn.classList.add('show'); ttx.classList.remove('show');
+  vidStart(nightTarget ? 'night' : 'day');
 }
 function leaveBeach(then) {
   if (!Beach.tgt && Beach.v <= 0) { if (then) then(); return; }
@@ -1679,6 +1674,70 @@ function arriveBeach() { // everyone jumps for joy on the sand
   for (const s of sprites) if (s.visible() && !s.ptr && s.state !== 'walk') { if (!s.M.hover) s.vz = rand(260, 380); s.arms(1.5); s.mood = 'giggle'; s.moodT = 1.5; if (n++ < 3) s.giggle(0.7, 3, rand(0, 0.4)); }
   Snd.chimes([1046.5, 1318.5, 1568, 2093], 0.07, 0.07);
 }
+
+// ---------- beach video: day and night loops, a sunset or sunrise film in between ----------
+const VSRC = { day: 'beach/day.mp4', night: 'beach/night.mp4', sunset: 'beach/sunset.mp4', sunrise: 'beach/sunrise.mp4' };
+// how far up the sand the waves reach through each loop (fraction of the picture height, 8 samples a second), measured from the videos
+const FRONT = { day: [0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.7222,0.72,0.7194,0.7194,0.7189,0.7167,0.7167,0.7167,0.7156,0.715,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.7194,0.72,0.7194,0.7189,0.7194,0.7211,0.7222,0.7244,0.7272,0.7283,0.7306,0.7311,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7333,0.7311,0.7306,0.7294,0.7267,0.7183,0.71,0.7133,0.7167,0.7189,0.7194,0.7194,0.7194,0.7178,0.7172,0.7194,0.7206,0.7217], night: [0.7194,0.7172,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7167,0.7172,0.7189,0.72,0.7222,0.7244,0.7256,0.7283,0.7306,0.7317,0.7333,0.7356,0.7372,0.7389,0.7394,0.7417,0.7417,0.7417,0.7433,0.7444,0.7444,0.7444,0.7444,0.7444,0.7467,0.7472,0.7472,0.7456,0.7444,0.7444,0.7444,0.7444,0.7433,0.7417,0.7411,0.7394,0.7417,0.7417,0.7383,0.7306,0.7322,0.735,0.7339,0.7333,0.7333,0.7333,0.7322,0.7306,0.7283,0.7261,0.725,0.7206,0.7194,0.7211,0.7211,0.7222,0.7206,0.7217,0.7222,0.7222,0.7206] };
+const BVID = { el: [$('#bgv0'), $('#bgv1')], name: [null, null], ok: [false, false], cur: 0, state: 'off', mode: 'day', to: null, after: null, xf: 0, vis: 0, nightFrom: 0, failT: 0 };
+BVID.el.forEach((v, i) => {
+  v.addEventListener('playing', () => { BVID.ok[i] = true; });
+  v.addEventListener('error', () => { BVID.ok[i] = false; if (BVID.state === 'trans' && i !== BVID.cur) vidSkipTrans(); });
+});
+function vidSet(i, name, loop) { const v = BVID.el[i]; v.loop = loop; if (BVID.name[i] !== name) { BVID.name[i] = name; BVID.ok[i] = false; v.src = VSRC[name]; } }
+function vidPlay(i, from0) { const v = BVID.el[i]; try { if (from0) v.currentTime = 0; } catch (e) {} const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+function vidStart(mode) {
+  BVID.mode = mode; BVID.state = 'loop'; BVID.to = BVID.after = null; BVID.xf = 0;
+  vidSet(BVID.cur, mode, true); vidPlay(BVID.cur, true);
+  const o = 1 - BVID.cur; vidSet(o, mode === 'day' ? 'sunset' : 'sunrise', false); BVID.el[o].pause();   // have the next film ready
+}
+// the Night/Day button on the beach plays the film from one loop to the other
+function vidNight(on) {
+  const want = on ? 'night' : 'day';
+  if (BVID.state === 'trans') { BVID.after = want; return; }
+  if (BVID.state !== 'loop' || BVID.mode === want) return;
+  const o = 1 - BVID.cur; BVID.to = want; BVID.after = null; BVID.state = 'trans'; BVID.xf = 0; BVID.xf2 = 0; BVID.nightFrom = night; BVID.failT = 0;
+  vidSet(o, want === 'night' ? 'sunset' : 'sunrise', false); vidPlay(o, true);
+}
+function vidSkipTrans() { const to = BVID.to || BVID.mode; vidStart(to); night = to === 'night' ? 1 : 0; }
+const curve = p => p < 0.5 ? p / 0.5 * 0.3 : 0.3 + (p - 0.5) / 0.5 * 0.7;   // how dark it is through the film (sun at the horizon half way)
+function updateVideo(dt) {
+  const els = BVID.el;
+  if (!Beach.tgt && Beach.v <= 0) {
+    if (BVID.state !== 'off') { BVID.state = 'off'; for (const v of els) v.pause(); }
+    if (BVID.vis !== 0) { BVID.vis = 0; for (const v of els) { v._op = 0; v.style.opacity = 0; } }
+    return;
+  }
+  const c = BVID.cur, o = 1 - c; let filmW = 0;   // how much of the picture is the film (the rest is the loop in c)
+  if (BVID.state === 'trans') {
+    const tv = els[o];
+    if (!BVID.ok[o]) { BVID.failT += dt; if (BVID.failT > 6) vidSkipTrans(); }
+    else if (BVID.xf < 1) BVID.xf = Math.min(1, BVID.xf + dt / 0.4);              // cross-fade from the loop into the film
+    const p = BVID.ok[o] && tv.duration ? clamp(tv.currentTime / tv.duration, 0, 1) : 0, k = curve(p);
+    night = BVID.to === 'night' ? Math.max(BVID.nightFrom * (1 - p), k) : Math.min(BVID.nightFrom, curve(1 - p));
+    if (BVID.xf >= 1 && BVID.name[c] !== BVID.to) { els[c].pause(); vidSet(c, BVID.to, true); try { els[c].currentTime = 0; } catch (e) {} }   // load the next loop under the film
+    // the film ends close to the next loop's first frame: start the loop half a second early and cross-fade into it
+    if (BVID.ok[o] && BVID.name[c] === BVID.to && tv.duration && (tv.ended || tv.currentTime >= tv.duration - 0.5)) {
+      if (els[c].paused) vidPlay(c, true);
+      if (BVID.ok[c] && !els[c].paused) BVID.xf2 = Math.min(1, (BVID.xf2 || 0) + dt / 0.45);
+    }
+    filmW = BVID.xf * (1 - (BVID.xf2 || 0));
+    if ((BVID.xf2 || 0) >= 1) {
+      BVID.mode = BVID.to; BVID.state = 'loop'; BVID.to = null; BVID.xf2 = 0; night = BVID.mode === 'night' ? 1 : 0; filmW = 0;
+      tv.pause(); vidSet(o, BVID.mode === 'day' ? 'sunset' : 'sunrise', false);
+      const nxt = BVID.after; BVID.after = null; if (nxt && nxt !== BVID.mode) vidNight(nxt === 'night');
+    }
+  }
+  // two stacked layers (bgv1 above bgv0): the lower one stays opaque, the upper one fades
+  const w1 = o === 1 ? filmW : 1 - filmW, fade = smooth01(BV / 0.55);
+  const op = [BVID.ok[0] && w1 < 0.999 ? 1 : 0, BVID.ok[1] ? w1 : 0];
+  if (!BVID.ok[0] && BVID.ok[1]) op[1] = 1;
+  const okc = BVID.ok[c] || (BVID.state === 'trans' && BVID.ok[o]);
+  BVID.vis += ((okc ? 1 : 0) - BVID.vis) * Math.min(1, dt * 6);
+  for (let i = 0; i < 2; i++) { const v = Math.round(op[i] * fade * 1000) / 1000; if (els[i]._op !== v) { els[i]._op = v; els[i].style.opacity = v; } }
+}
+const smooth01 = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+
 let trayOp = 1;
 function updateBeach(dt) {
   const was = Beach.v;
@@ -1686,25 +1745,28 @@ function updateBeach(dt) {
   const k = Beach.v; BV = k * k * (3 - 2 * k); if (BV < 1e-4) BV = 0;
   const op = Math.round((1 - BV) * 100) / 100; if (op !== trayOp) { trayOp = op; trayEl.style.opacity = op; }
   camUpdate();
+  // near the end of the tilt the sand tray fades into the picture's sand; from then on only new marks are drawn
+  Beach.ov = smooth01((Beach.v - 0.72) / 0.28);
+  if (Beach.ov > 0 && !Beach.snapped && gl) { takeSnap(); Beach.snapped = true; }
   if (Beach.tgt && Beach.v >= 1 && !Beach.arrived) { Beach.arrived = true; arriveBeach(); }
-  if (!Beach.tgt && Beach.v <= 0 && was > 0) { Beach.arrived = false; wave = wave && wave.ax === 'y' ? null : wave; const f = Beach.then; Beach.then = null; if (f) f(); }
+  if (!Beach.tgt && Beach.v <= 0 && was > 0) { Beach.arrived = false; Beach.snapped = false; Beach.letter = null; wave = wave && wave.ax === 'y' ? null : wave; const f = Beach.then; Beach.then = null; if (f) f(); }
+  updateVideo(dt);
   if (!BV) return;
-  // waves rush up the beach, then slide back and leave wet sand that dries
-  Beach.t += dt; const per = 7.5, ph = (Beach.t % per) / per, cyc = Math.floor(Beach.t / per);
-  let w;
-  if (ph < 0.22) { const u = ph / 0.22; w = 1 - (1 - u) * (1 - u); } else if (ph < 0.3) w = 1;
-  else if (ph < 0.8) { const u = (ph - 0.3) / 0.5; w = 1 - u * u * (3 - 2 * u); } else w = 0;
-  const amp = Beach.reach * (0.7 + 0.45 * hash01(cyc));
-  Beach.front = Beach.ys - 10 + (amp + 10) * w;
-  Beach.wet = Math.max(Beach.front, Math.max(Beach.ys, Beach.wet) - dt * amp / 7);
-  Beach.rising = ph < 0.22;
-  if (cyc !== Beach.cyc) { Beach.cyc = cyc; if (BV > 0.9) Snd.wash(0.8 + 0.4 * Math.random()); }
-  // sprites close to the water run away from the wave (and giggle)
+  // waves in the video: where they reach right now; sprites near the water run away when one comes in
+  Beach.washCD -= dt; Beach.rising = false; Beach.front = -1;
+  const v = BVID.el[BVID.cur], arr = FRONT[BVID.mode];
+  if (BVID.state === 'loop' && BVID.ok[BVID.cur] && arr && arr.length && v.duration) {
+    const n = arr.length, at = t => { const x = ((t * 8) % n + n) % n, i = Math.floor(x), f = x - i; return arr[i] * (1 - f) + arr[(i + 1) % n] * f; };
+    const t = v.currentTime, f = at(t), f0 = at(t - 0.3);
+    Beach.frontF = f; Beach.front = CAM.img[1] + f * CAM.img[3]; Beach.rising = f - f0 > 0.0015;
+    const lo = Math.min(...arr), hi = Math.max(...arr);
+    if (Beach.rising && f > lo + (hi - lo) * 0.45 && Beach.washCD <= 0 && BV > 0.9) { Beach.washCD = 2.5; Snd.wash(0.7 + 0.3 * Math.random()); }
+  }
   if (Beach.rising && Beach.arrived) for (const s of sprites) {
     if (s.dead || s.state !== 'idle' || s.ptr || s.z > 2 || s.castle || s.pile || s.M.hover || (s.runT || 0) > T) continue;
-    PJ(s.x, s.y); if (PY > Beach.front + 22) continue;
+    PJ(s.x, s.y); if (PY > Beach.front + 14) continue;
     s.runT = T + 2.5; s.hopT = rand(2, 4);
-    s.hopTo(clamp(s.x + rand(-50, 50), TX + s.r, TX + TW - s.r), Math.min(TY + TH - s.r, s.y + rand(90, 150)), 290);
+    s.hopTo(clamp(s.x + rand(-50, 50), TX + s.r, TX + TW - s.r), Math.min(TY + TH - s.r, s.y + rand(110, 170)), 290);
     s.mood = 'surprised'; s.moodT = 0.7; s.arms(1.2); if (thr('splash', 350)) { s.giggle(0.7, 2, 0.1); Snd.splat(0.35); }
     drops(s.x, s.y - 4, 4, [0.6, 0.9, 1]);
   }
@@ -2059,6 +2121,7 @@ function complete() {
   for (const s of sprites) if (s.visible() && !s.ptr && s.state !== 'walk') { if (!s.M.hover) s.vz = rand(320, 420); s.spinV = rand(8, 14) * (Math.random() < 0.5 ? -1 : 1); s.arms(2); s.mood = 'giggle'; s.moodT = 2; }
   const ev = (t, fn) => Trace.events.push({ t: t0 + t, fn });
   ev(0.25, () => Voice.say(`${NAME[id]}!`, { priority: true, pitch: 1.35 }));
+  Beach.letter = Trace.strokes.map(st => st.pts.map(p => ({ x: p.x, y: p.y })));
   ev(0.6, () => enterBeach());
   let tail;
   if (isNum(id)) { const n = +id, ch = pick(COUNT_EMOJI), sz = Math.min(58, (TY + TH - (L.y0 + L.gh)) / (n > 5 ? 2.3 : 1.3), TW * 0.6 / Math.max(3, n > 5 ? Math.ceil(n / 2) : n) / 1.15);
@@ -2099,6 +2162,18 @@ function twinkleDots(c, pts, r, alphaOf, rgb) {
   for (const b of TWB) b.length = 0;
   for (let i = 0; i < pts.length; i += 2) { const p = pts[i]; if (p.lit) continue; TWB[Math.min(5, Math.max(0, (alphaOf(i) * 6) | 0))].push(p); }
   TWB.forEach((b, lv) => { if (!b.length) return; c.fillStyle = `rgba(${rgb},${((lv + 0.5) / 6).toFixed(3)})`; c.beginPath(); for (const p of b) { c.moveTo(p.x + r, p.y); c.arc(p.x, p.y, r, 0, TAU); } c.fill(); });
+}
+// her letter in gold on the beach sand
+function drawBeachLetter(c) {
+  const L = Beach.letter; if (!L || Beach.ov <= 0.01) return;
+  c.save(); c.lineCap = c.lineJoin = 'round'; c.globalAlpha = Beach.ov;
+  let kx = 1; { const p = L[0][Math.floor(L[0].length / 2)]; PJ(p.x, p.y); kx = PK; }
+  const w = Math.max(10, (Trace.tol || 40) * 0.36 * kx);
+  c.globalCompositeOperation = 'lighter';
+  for (const pts of L) { polyline(c, pts); c.strokeStyle = `rgba(255,200,90,${0.32 + 0.08 * Math.sin(T * 2)})`; c.lineWidth = w * 2.1; c.stroke(); }
+  c.globalCompositeOperation = 'source-over';
+  for (const pts of L) { polyline(c, pts); c.strokeStyle = '#ffcf55'; c.lineWidth = w; c.stroke(); polyline(c, pts); c.strokeStyle = 'rgba(255,246,200,0.8)'; c.lineWidth = w * 0.35; c.stroke(); }
+  c.restore();
 }
 function drawTrace(c) {
   const after = Trace.after;
@@ -2437,6 +2512,7 @@ onBtn($('#bSun'), () => {
   $('#sunIc').textContent = nightTarget ? '☀️' : '🌙'; $('#sunLbl').textContent = nightTarget ? 'Day' : 'Night';
   $('#bSun').style.setProperty('--c', nightTarget ? 'linear-gradient(180deg,#ffe27a,#ffb23f)' : 'linear-gradient(180deg,#8f86e8,#4b3fa8)');
   nightTarget ? Snd.night() : Snd.day();
+  if (Beach.tgt) vidNight(!!nightTarget);
   for (const s of sprites) if (s.visible() && !s.ptr && s.state !== 'walk' && Math.random() < 0.7) { s.arms(0.8); s.mood = nightTarget ? 'surprised' : 'giggle'; s.moodT = 0.8; }
 });
 onBtn($('#bWave'), () => { closePicker(); startWave(); });
@@ -2491,6 +2567,7 @@ function drawSpiral(c, x, y, R, str, rot) {
 function drawFx() {
   const c = ctx; c.setTransform(RS, 0, 0, RS, 0, 0); c.clearRect(0, 0, W, H);
   drawTrails(c, lastDt);
+  drawBeachLetter(c);
   drawTrace(c);
   for (const s of sprites) if (s.e < 0.999 && s.e > 0.02 && !s.popped && !s.isLetter) { if (BV) setSprMap(c, s); s.drawLip(c); }
   if (BV) resetMap(c);
@@ -2544,7 +2621,7 @@ function loop(now) {
   ambT -= dt; if (ambT <= 0) { ambT = rand(0.05, 0.16) * (1 - night * 0.6); sparks(TX + rand(0, TW), TY + rand(0, TH), 1, 0); }
   if (pf) mark('coll');
   updateParticles(dt); if (pf) mark('partUpd'); relax(); if (pf) mark('relax');
-  night += (nightTarget - night) * Math.min(1, dt * 2.2);
+  if (BVID.state !== 'trans') night += (nightTarget - night) * Math.min(1, dt * 2.2);
   renderGL(); if (pf) mark('gl'); drawFx(); if (pf) { mark('fx'); PROF.n++; }
   const n = visibleCount(); if (n !== lastCount) { if (n > lastCount && lastCount >= 0) { const el = $('#count'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } lastCount = n; countEl.textContent = narrowUI ? String(n) : 'Sand Sprites: ' + n; }
 }
@@ -2558,7 +2635,7 @@ if (initGL()) {
   for (const id of Book.data.f.slice()) if (GLYPHS[id]) { const p = randSpot(); spawnFriend(id, p.x, p.y, false); }
   requestAnimationFrame(t => { last = t; requestAnimationFrame(loop); });
 }
-window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
+window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, BVID, get night() { return night; }, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
 try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 })();
 </script>

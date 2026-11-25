@@ -19,12 +19,11 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 - Finishing a stroke plays a chime and the helper sprite cheers. Finishing the whole character reads it aloud in English ("Bee! Bee is for Bear!" with 🐻, or counts "One, two, three!" for numbers), praises her, and **the camera tilts down to the beach**.
 
 ## The beach
-- After each letter or number the sand tray tilts back into a sloping rainbow beach in front of the sea, and the sprites stand on the sand. Her golden letter stays written in the sand.
-- Everything still works there: draw in the sand, tap, squish, drag and fling the sprites, summon new ones, swirl.
-- Waves wash up the beach every few seconds; sprites close to the water run away from them. **🌊 Smooth** sends one big sea wave over the whole beach. **🌙 Night** turns it into a moonlit beach.
+- After each letter or number the sand tray tilts back and fades into a rainbow beach in front of the sea. The beach is a looping video (real waves washing up the sand); the sprites stand on its sand and her golden letter stays written there.
+- Everything still works there: tap, squish, drag and fling the sprites (flick up to toss them into the sky), summon new ones, swirl. Drawing and painting in the sand leaves marks on the beach.
+- Sprites close to the water run away when a wave comes in (timed to the waves in the video). **🌊 Smooth** sends one big sea wave over the beach and washes her marks away.
+- **🌙 Night** plays a sunset film: the sun sinks into the sea, then the moon rises over the waterfall, and the beach becomes a moonlit night loop. **☀️ Day** plays the sunrise.
 - **🏠 Home** (top centre) goes back to the sand tray. ✏️ Write, a tile in the 📖 book, or the beach's own Home button all bring her back to the tray first.
-- The finished character turns into a **gummy letter friend** that says its name when tapped. Friends wait on the sand (saved on the device, up to 14).
-- In the **📖 book**, **✨ Collect** sends every letter friend on the sand flying into the book; each one earns its star there, then the book opens to show the new stars.
 
 ## Materials
 | | Shape | Feel |
@@ -40,7 +39,7 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 | 🌈 Rainbow | star | glossy flowing rainbow; **drag it onto any sprite to give it a new colour** (a different one each touch) and it paints rainbow trails in the sand |
 
 Sprites are soft bodies (a ring of springs keeping shape, volume and curvature) rendered with WebGL shaders.
-All sprites, effects and sounds are generated in code; the only pictures are the app icons and the beach background (`bg-day.jpg`, `bg-night.jpg`). The beach is the same tray seen through a tilted camera (a projective map of the tray plane), so sprites and the sand keep working unchanged; sprites are drawn upright around the point they stand on.
+All sprites, effects and sounds are generated in code. The beach background is made of video loops and films in `beach/` (generated with Wan 2.2 from painted keyframes, with first/last-frame segments joined so they loop without a seam). The beach is the same tray seen through a tilted camera (a projective map of the tray plane laid on the picture's sand, vanishing at its horizon), so sprites and the sand keep working unchanged; sprites are drawn upright around the point they stand on.
 
 ## Install on iPad
 Open the link in **Safari** → Share → **Add to Home Screen**. It runs full-screen and works offline after the first visit.
