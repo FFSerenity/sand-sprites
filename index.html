@@ -1443,12 +1443,27 @@ class Sprite {
     if (this.state === 'idle' && !this.ptr && !air2 && !this.pressing && !this.pile && !this.castle) { this.hopT -= dt; if (this.hopT <= 0) this.idleAct(); if (this.age > this.life && activeCount() > 3 && !this.captive) this.dive(); }
   }
   throwFrom(p) {
+    if (BV > 0.5 && !this.M.hover && p.sh && p.sh.length >= 2) { this.toss(p); return; }
     const h = p.hist; let vx = 0, vy = 0;
     if (h.length >= 2) { const a = h[0], b = h[h.length - 1], dtt = (b.t - a.t) / 1000; if (dtt > 0.005) { vx = (b.x - a.x) / dtt; vy = (b.y - a.y) / dtt; } }
     const sp = hyp(vx, vy), cap = 2400; if (sp > cap) { vx *= cap / sp; vy *= cap / sp; }
     this.state = 'fly'; this.st = 0; this.ptr = null; this.bounces = 0;
     if (sp > 350) { this.vx = vx * 0.85; this.vy = vy * 0.85; this.vz = this.M.hover ? 0 : 160 + Math.min(sp, 2400) * 0.18; Snd.wheee(this.voice); this.mood = 'giggle'; this.moodT = 1.2; this.spinV = (vx > 0 ? 1 : -1) * Math.min(12, sp / 200); this.arms(1); }
     else { this.vx = vx * 0.3; this.vy = vy * 0.3; this.vz = this.M.hover ? 0 : 60; this.mood = 'happy'; }
+    if (this.mat === 'slime') Snd.splort(0.5);
+  }
+  // on the beach a flick is read on screen: up flies into the sky (height), down comes toward you, sideways stays sideways
+  toss(p) {
+    const h = p.sh, a = h[0], b = h[h.length - 1], dtt = (b.t - a.t) / 1000; let sx = 0, sy = 0;
+    if (dtt > 0.005) { sx = (b.x - a.x) / dtt; sy = (b.y - a.y) / dtt; }
+    const sp = hyp(sx, sy), cap = 2600; if (sp > cap) { sx *= cap / sp; sy *= cap / sp; }
+    sprBB(this); const K = BBA[4]; PJ(this.x, this.y); const fy = Math.max(0.3, PV);
+    this.state = 'fly'; this.st = 0; this.ptr = null; this.bounces = 0;
+    if (sp > 300) {
+      if (sy < 0) { this.vz = Math.min(1150, 150 - sy * 0.85 / K); this.vx = sx / K * 0.35; this.vy = 0; }
+      else { this.vx = sx / K * 0.8; this.vy = sy / fy * 0.75; this.vz = 160 + sy * 0.12; }
+      Snd.wheee(this.voice); this.mood = 'giggle'; this.moodT = 1.6; this.spinV = (sx >= 0 ? 1 : -1) * Math.min(14, sp / 180); this.arms(1.4);
+    } else { this.vx = sx / K * 0.3; this.vy = sy / fy * 0.3; this.vz = 60; this.mood = 'happy'; }
     if (this.mat === 'slime') Snd.splort(0.5);
   }
   reveal() { this.state = 'emerge'; this.st = 0; Snd.bloop(); Snd.giggle(this.voice, 1, 4, 0.25); this.mood = 'giggle'; this.moodT = 1.3; this.arms(1.3); burstSand(this.x, this.y, this.r); sparks(this.x, this.y - this.r, 10, this.r); }
@@ -2219,7 +2234,7 @@ function onDown(e) {
   e.preventDefault(); Snd.unlock(); if (!started) return; closePicker();
   try { fx.setPointerCapture(e.pointerId); } catch (_) {}
   const sx = e.clientX, sy = e.clientY, t = performance.now(), [x, y] = UNPJ(sx, sy);
-  const p = { id: e.pointerId, x, y, sx, sy, sx0: sx, sy0: sy, lx: x, ly: y, t0: t, hist: [{ x, y, t }], mode: 'sand', s: null, moved: false, still: 0, whirlDone: false, dist: 0, speed: 0, wx: x, wy: y, wstr: 0, path: [{ x, y }], plen: 0 };
+  const p = { id: e.pointerId, x, y, sx, sy, sx0: sx, sy0: sy, lx: x, ly: y, t0: t, hist: [{ x, y, t }], sh: [{ x: sx, y: sy, t: e.timeStamp || t }], mode: 'sand', s: null, moved: false, still: 0, whirlDone: false, dist: 0, speed: 0, wx: x, wy: y, wstr: 0, path: [{ x, y }], plen: 0 };
   if (hitMagic(x, y)) { p.mode = 'none'; ptrs.set(e.pointerId, p); return; }
   const s = nearStroke(x, y) ? null : hitSprite(sx, sy);
   if (s) { if (s.state === 'peek') { s.reveal(); p.mode = 'none'; } else if (s.ptr) p.mode = 'none'; else { p.mode = 'sprite'; p.s = s; ptrW(p); p.hist[0].x = p.x; p.hist[0].y = p.y; s.grab(p); } }
@@ -2230,6 +2245,7 @@ function onMove(e) {
   const p = ptrs.get(e.pointerId); if (!p) return; e.preventDefault();
   const t = performance.now(); p.sx = e.clientX; p.sy = e.clientY; ptrW(p); const x = p.x, y = p.y;
   p.hist.push({ x, y, t }); while (p.hist.length > 2 && t - p.hist[0].t > 90) p.hist.shift();
+  { const te = e.timeStamp || t; p.sh.push({ x: p.sx, y: p.sy, t: te }); while (p.sh.length > 2 && te - p.sh[0].t > 90) p.sh.shift(); }
   if (!p.moved && hyp(p.sx - p.sx0, p.sy - p.sy0) > 12) p.moved = true;
   if (p.mode === 'sand') { const d = hyp(x - p.lx, y - p.ly);
     if (d > 0.5) { if (Trace.active) traceMove(p.lx, p.ly, x, y); const a = toGrid(p.lx, p.ly), b = toGrid(x, y); plow(a[0], a[1], b[0], b[1], brushR(), 0.05, 0.9, paintColor(), 0.4); p.dist += d; p.lx = x; p.ly = y; if (Math.random() < d / 60) grains(x, y, 1, sandColorAt(x, y), 0.4); }
@@ -2542,7 +2558,7 @@ if (initGL()) {
   for (const id of Book.data.f.slice()) if (GLYPHS[id]) { const p = randSpot(); spawnFriend(id, p.x, p.y, false); }
   requestAnimationFrame(t => { last = t; requestAnimationFrame(loop); });
 }
-window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
+window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
 try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 })();
 </script>
