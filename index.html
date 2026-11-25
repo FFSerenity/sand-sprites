@@ -857,6 +857,8 @@ const Snd = (() => {
         const o2 = osc('sine', f * 2.01, tt, 0.06, 0.05 * v, 0.008); o2.frequency.exponentialRampToValueAtTime(f * 1.6, tt + 0.06); } },
     whoop(voice = 850) { if (!ok()) return; const t = now(); const o = osc('triangle', voice * 0.7, t, 0.18, 0.14, 0.01); o.frequency.exponentialRampToValueAtTime(voice * 1.35, t + 0.15); },
     wheee(voice = 850) { if (!ok()) return; const t = now(); const o = osc('triangle', voice * 0.8, t, 0.6, 0.15, 0.03); o.frequency.linearRampToValueAtTime(voice * 1.6, t + 0.2); o.frequency.exponentialRampToValueAtTime(voice * 1.05, t + 0.6); vib(o, t, 7, 30, 0.6); },
+    splash(v = 1) { if (!ok()) return; const t = now(); const f = noise(t, 0.45, 0.14 * v, 'bandpass', 2600, 0.9, 0.01); f.frequency.exponentialRampToValueAtTime(900, t + 0.4);
+      noise(t + 0.03, 0.25, 0.05 * v, 'highpass', 5200, 0.7, 0.01); S.bubbles(2, 0.35 * v, false, 0.12); },
     plop(v = 1) { if (!ok()) return; const t = now(); const o = osc('sine', 300, t, 0.16, 0.35 * v, 0.003); o.frequency.exponentialRampToValueAtTime(70, t + 0.15); noise(t, 0.12, 0.22 * v, 'lowpass', 1100, 0.8); noise(t + 0.02, 0.3, 0.06 * v, 'highpass', 4000); },
     pat(v = 1) { if (!ok()) return; const t = now(); noise(t, 0.08, 0.12 * v, 'lowpass', 700, 0.8); },
     bonk(v = 1) { if (!ok()) return; const t = now(); const o = osc('sine', 330, t, 0.1, 0.3 * v, 0.002); o.frequency.exponentialRampToValueAtTime(250, t + 0.1); osc('triangle', 540, t, 0.06, 0.1 * v, 0.002); noise(t, 0.025, 0.2 * v, 'bandpass', 2000, 2, 0.001); },
@@ -1863,11 +1865,11 @@ FWIMG.onload = () => { try {
     const k = 255 / a; q[i] = Math.min(255, q[i] * k); q[i + 1] = Math.min(255, q[i + 1] * k); q[i + 2] = Math.min(255, q[i + 2] * k); q[i + 3] = a; }
   x.putImageData(d, 0, 0); FWC = c; } catch (e) {} };
 const loadFireworks = () => { if (!FWIMG.src) FWIMG.src = 'beach/fireworks.jpg?v=1'; };
-function seaBand() { const [ix, iy, iw, ih] = CAM.img, hY = iy + PIC.hor * ih; return { hY, y0: hY + 0.03 * ih, y1: hY + 0.12 * ih, ih }; }
+function seaBand() { const [ix, iy, iw, ih] = CAM.img, hY = iy + PIC.hor * ih; return { hY, y0: hY + 0.014 * ih, y1: hY + 0.055 * ih, ih }; }
 const seaOn = () => Props.st >= PROP_STEPS && Beach.tgt && Beach.v >= 1 && BV > 0.99;
 function addDolphin(x, y) {
   if (Sea.dol.length >= 3) return;
-  const b = seaBand(); y = clamp(y ?? rand(b.y0, b.y1), b.y0, b.y1); const L = (y - b.hY) * 1.25 + 0.065 * Math.min(b.ih, W * 0.62);
+  const b = seaBand(); y = clamp(y ?? rand(b.y0, b.y1), b.y0, b.y1); const L = (y - b.hY) * 1.0 + 0.045 * Math.min(b.ih, W * 0.62);
   x = clamp(x ?? rand(W * 0.12, W * 0.88), L, W - L);
   const dir = x > W / 2 ? -1 : 1;
   Sea.dol.push({ x, y, L, dir, t: -0.25, dur: rand(1.35, 1.7), sp0: false, sp1: false });
@@ -1878,19 +1880,19 @@ function addFirework(x, y) {
   const b = seaBand(), r = rand(0.12, 0.19) * b.ih, top = Math.max(CAM.img[1], 0) + r * 0.75;
   x = clamp(x ?? rand(W * 0.1, W * 0.9), r * 0.6, W - r * 0.6); y = clamp(y ?? rand(top, b.hY - r * 0.9), top, b.hY - r * 0.5);
   Sea.fw.push({ x, y, r, k: (Math.random() * 4) | 0, t: 0, rise: rand(0.55, 0.8), x0: x + rand(-20, 20), y0: b.hY + 4, boom: false });
-  Snd.whistle();
+  if (night > 0.5) Snd.whistle();
 }
 function updateSea(dt) {
   const on = seaOn(), nt = Math.max(night, nightBoost);
   if (on && nt < 0.4) { Sea.dT -= dt; if (Sea.dT <= 0) { Sea.dT = rand(4, 8); addDolphin(); } }
-  if (on && nt > 0.6) { Sea.fT -= dt; if (Sea.fT <= 0) { Sea.fT = rand(1.2, 2.8); addFirework(); if (Math.random() < 0.3) setTimeout(() => seaOn() && addFirework(), 350); } }
+  if (on && nt > 0.6) { Sea.fT -= dt; if (Sea.fT <= 0) { Sea.fT = rand(1.2, 2.8); addFirework(); if (Math.random() < 0.3) setTimeout(() => seaOn() && night > 0.6 && addFirework(), 350); } }
   if (!BV) { Sea.dol.length = 0; Sea.fw.length = 0; return; }
   for (let i = Sea.dol.length - 1; i >= 0; i--) { const d = Sea.dol[i]; d.t += dt / d.dur;
-    if (d.t >= 0 && !d.sp0) { d.sp0 = true; Snd.splat(0.3); }
-    if (d.t >= 0.97 && !d.sp1) { d.sp1 = true; Snd.splat(0.4); }
+    if (d.t >= 0 && !d.sp0) { d.sp0 = true; if (night < 0.5) Snd.splash(0.5); }
+    if (d.t >= 0.97 && !d.sp1) { d.sp1 = true; if (night < 0.5) Snd.splash(0.7); }
     if (d.t > 1.6) Sea.dol.splice(i, 1); }
   for (let i = Sea.fw.length - 1; i >= 0; i--) { const f = Sea.fw[i]; f.t += dt;
-    if (!f.boom && f.t >= f.rise) { f.boom = true; Snd.boom(); }
+    if (!f.boom && f.t >= f.rise) { f.boom = true; if (night > 0.5) Snd.boom(); }
     if (f.t > f.rise + 2.2) Sea.fw.splice(i, 1); }
 }
 // tapping the sea (by day) or the sky (at night) once everything is out
