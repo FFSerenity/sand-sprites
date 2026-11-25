@@ -19,7 +19,7 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 - Finishing a stroke plays a chime and the helper sprite cheers. Finishing the whole character reads it aloud in English ("Bee! Bee is for Bear!" with 🐻, or counts "One, two, three!" for numbers), praises her, and **the camera tilts down to the beach**.
 
 ## The beach
-- After each letter or number the sand tray tilts back and fades into a rainbow beach in front of the sea. The beach is a looping video (real waves washing up the sand); the sprites stand on its sand and her golden letter stays written there.
+- After each letter or number the sand tray tilts back and fades into a rainbow beach in front of the sea. The beach is a looping video (real waves washing up the sand); the sprites stand on its sand and her letter stays carved in it.
 - Everything still works there: tap, squish, drag and fling the sprites (flick up to toss them into the sky), summon new ones, swirl. Drawing and painting in the sand leaves marks on the beach.
 - Sprites close to the water run away when a wave comes in (timed to the waves in the video). **🌊 Smooth** sends one big sea wave over the beach and washes her marks away.
 - **🌙 Night** plays a sunset film: the sun sinks into the sea, then the moon rises over the waterfall, and the beach becomes a moonlit night loop. **☀️ Day** plays the sunrise.
