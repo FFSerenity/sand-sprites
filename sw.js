@@ -1,6 +1,6 @@
 // Offline support: always try the network first (so updates arrive), fall back to the cached copy.
-const CACHE = 'sand-sprites-v10';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './beach/day.jpg', './beach/night.jpg'];
+const CACHE = 'sand-sprites-v11';
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './beach/day.jpg', './beach/night.jpg', './beach/props.webp', './beach/props_e.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))));

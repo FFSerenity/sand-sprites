@@ -452,6 +452,12 @@ const VS_SH = `attribute vec2 aPos;attribute vec2 aB;attribute vec4 aC;uniform v
 void main(){vL=aB;vC=aC;gl_Position=vec4(aPos.x/uView.x*2.-1.,1.-aPos.y/uView.y*2.,0.,1.);}`;
 const FS_SH = `precision mediump float;varying vec2 vL;varying vec4 vC;
 void main(){float d=length(vL);float a=smoothstep(1.0,0.25,d)*vC.a;gl_FragColor=vec4(vC.rgb*a,a);}`;
+// beach props: premultiplied picture; at night darkened to moonlight (aC.y) with lit windows from the emission map (aC.z)
+const VS_PR = `attribute vec2 aPos;attribute vec2 aB;attribute vec4 aC;uniform vec2 uView;varying vec2 vUV;varying vec4 vC;
+void main(){vUV=aB;vC=aC;gl_Position=vec4(aPos.x/uView.x*2.-1.,1.-aPos.y/uView.y*2.,0.,1.);}`;
+const FS_PR = `precision mediump float;varying vec2 vUV;varying vec4 vC;uniform sampler2D uP;uniform sampler2D uE;uniform float uNight;uniform float uTime;
+void main(){vec4 c=texture2D(uP,vUV);if(c.a<0.004)discard;float e=texture2D(uE,vUV).r*vC.z*(0.88+0.12*sin(uTime*2.3+vUV.x*9.0));
+vec3 col=mix(c.rgb,c.rgb*vec3(0.56,0.58,0.9),uNight*vC.y)+e*uNight*vec3(1.0,0.78,0.40)*c.a;gl_FragColor=vec4(col,c.a)*vC.x;}`;
 // sprites are drawn upright around their ground point: uBB = (ground x, y on the tray, the same point on screen), uBK = scale there
 const VS_SP = `attribute vec2 aPos;attribute vec2 aB;attribute vec2 aC;uniform vec2 uView;uniform vec4 uBB;uniform float uBK;varying vec2 vDisk;varying vec2 vFace;varying vec2 vCss;varying float vK;
 void main(){vec2 p=uBB.zw+(aPos-uBB.xy)*uBK;vDisk=aB;vFace=aC;vCss=p;vK=uBK;gl_Position=vec4(p.x/uView.x*2.-1.,1.-p.y/uView.y*2.,0.,1.);}`;
@@ -635,6 +641,7 @@ void main(){
   gl_FragColor = vec4((col * alpha + spec) * mask, mask * alpha);
 }`;
 
+let progPr, bufPr, glTexP = null, glTexE = null; const UPR = {};
 let faceFrame = 0, gl = null, progSand, progBg, progWave, glTexS = null, progSh, progSp, glTexBg = [], bufTri, bufSh, bufSp, ibSp, glTexA, glTexB, glTexFace, texW = 0, texH = 0, faceTexInit = false;
 const US = {}, UBG = {}, UWV = {}, USH = {}, USP = {};
 function mkProg(vs, fs, U, names) {
@@ -657,10 +664,11 @@ function initGL() {
   progBg = mkProg(VS_TRI, COMMON + FS_BG, UBG, COMMON_U);
   progWave = mkProg(VS_TRI, COMMON + FS_WAVE, UWV, COMMON_U);
   progSh = mkProg(VS_SH, FS_SH, USH, ['uView']);
+  progPr = mkProg(VS_PR, FS_PR, UPR, ['uView', 'uP', 'uE', 'uNight', 'uTime']);
   progSp = mkProg(VS_SP, (deriv ? '#extension GL_OES_standard_derivatives : enable\n' : '#define NO_DERIV\n') + COMMON + FS_SP, USP,
     COMMON_U.concat(['uView', 'uBB', 'uBK', 'uCol', 'uMat', 'uDents', 'uSlot', 'uFace', 'uR', 'uClip', 'uFaceOn', 'uP', 'uSeed', 'uCols', 'uNCol']));
   bufTri = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bufTri); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  bufSh = gl.createBuffer(); bufSp = gl.createBuffer();
+  bufSh = gl.createBuffer(); bufSp = gl.createBuffer(); bufPr = gl.createBuffer();
   const idx = [];
   for (let i = 0; i < NB; i++) idx.push(0, 1 + i, 1 + (i + 1) % NB);
   for (let k = 1; k < NR; k++) for (let i = 0; i < NB; i++) { const a = 1 + (k - 1) * NB + i, b = 1 + (k - 1) * NB + (i + 1) % NB, c = 1 + k * NB + i, d = 1 + k * NB + (i + 1) % NB; idx.push(a, c, b, b, c, d); }
@@ -671,6 +679,7 @@ function initGL() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; };
   glTexA = mk(); glTexB = mk(); glTexFace = mk(); texW = texH = 0; faceTexInit = false;
   glTexBg = [mk(), mk()]; upBg(0); upBg(1); glTexS = mk(); upSnap();
+  glTexP = mk(); glTexE = mk(); upProps(0); upProps(1);
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   return true;
 }
@@ -690,6 +699,13 @@ const BGI = [new Image(), new Image()]; let bgReady = 0;
 function upBg(i) { if (!gl || !glTexBg[i] || !BGI[i].complete || !BGI[i].naturalWidth) return;
   gl.activeTexture(gl.TEXTURE3 + i); gl.bindTexture(gl.TEXTURE_2D, glTexBg[i]); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, BGI[i]); }
 BGI.forEach((im, i) => { im.onload = () => { bgReady++; upBg(i); }; im.src = i ? 'beach/night.jpg' : 'beach/day.jpg'; });
+// beach props picture (colour + alpha) and its glow map (lit windows at night), on texture units 6 and 7
+const PIMG = [new Image(), new Image()]; let propsReady = 0;
+function upProps(i) { const im = PIMG[i], t = i ? glTexE : glTexP; if (!gl || !t || !im.complete || !im.naturalWidth) return;
+  gl.activeTexture(gl.TEXTURE6 + i); gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, !i);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); }
+PIMG.forEach((im, i) => { im.onload = () => { propsReady++; upProps(i); }; im.src = i ? 'beach/props_e.png' : 'beach/props.webp'; });
 // snapshot of the sand (colour + height) taken on arriving at the beach: afterwards only changes since then are drawn over the picture
 let snapA8 = null, snapW = 0, snapH = 0;
 function takeSnap() { fillTex(); snapA8 = texA8.slice(); snapW = GW; snapH = GH; upSnap(); }
@@ -736,13 +752,23 @@ function renderGL() {
   if (BV > 0 && wave && wave.ax === 'y') { gl.useProgram(progWave); setCommon(UWV); gl.drawArrays(gl.TRIANGLES, 0, 3); }
   // shadows
   const order = sprites.filter(s => s.e > 0.001 && !s.popped && s.state !== 'caught').sort((a, b) => a.y - b.y);
-  let n = 0; const need = order.length * 2 * 48; if (shBuf.length < need) shBuf = new Float32Array(need);
+  const pq = propsToDraw();
+  let n = 0; const need = (order.length * 2 + pq.length) * 48; if (shBuf.length < need) shBuf = new Float32Array(need);
   const quad = (cx, cy, rx, ry, c, a) => { const P = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]];
     if (BV) { PJ(cx, cy); cx = PX; cy = PY; rx *= PK * SB(); ry *= PK * SB() * 0.85; }
     for (const p of P) { shBuf[n++] = cx + p[0] * rx; shBuf[n++] = cy + p[1] * ry; shBuf[n++] = p[0]; shBuf[n++] = p[1]; shBuf[n++] = c[0]; shBuf[n++] = c[1]; shBuf[n++] = c[2]; shBuf[n++] = a; } };
   for (const s of order) s.shadowQuads(quad);
+  for (const p of pq) quad(p.bx, p.by, p.sr, p.sr * 0.32, [0.16, 0.08, 0.24], 0.3 * p.a);
   if (n) { gl.useProgram(progSh); gl.uniform2f(USH.uView, W, H); gl.bindBuffer(gl.ARRAY_BUFFER, bufSh); gl.bufferData(gl.ARRAY_BUFFER, shBuf.subarray(0, n), gl.DYNAMIC_DRAW);
     attribs(3); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 32, 0); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 8); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16); gl.drawArrays(gl.TRIANGLES, 0, n / 8); }
+  // props: one upload; each is drawn just before the first sprite standing in front of it
+  let pj = 0; const pv = pq.length ? propVerts(pq) : null;
+  const propsUpTo = (ymax, sp) => { const j0 = pj; while (pj < pq.length && pq[pj].by <= ymax) pj++; if (pj === j0) return;
+    gl.useProgram(progPr); gl.uniform2f(UPR.uView, W, H); gl.uniform1f(UPR.uNight, Math.max(night, nightBoost)); gl.uniform1f(UPR.uTime, T); gl.uniform1i(UPR.uP, 6); gl.uniform1i(UPR.uE, 7);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufPr); gl.bufferData(gl.ARRAY_BUFFER, pv, gl.DYNAMIC_DRAW); attribs(3);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 32, 0); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 8); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16);
+    gl.drawArrays(gl.TRIANGLES, pq[j0].v0, pq[pj - 1].v0 + pq[pj - 1].vn - pq[j0].v0);
+    if (sp) { gl.useProgram(progSp); gl.bindBuffer(gl.ARRAY_BUFFER, bufSp); attribs(3); } };
   // sprites
   gl.useProgram(progSp); setCommon(USP); gl.uniform2f(USP.uView, W, H); gl.uniform1i(USP.uFace, 2);
   gl.bindBuffer(gl.ARRAY_BUFFER, bufSp); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibSp); attribs(3);
@@ -756,16 +782,18 @@ function renderGL() {
     else { s.bodyMesh(room(NV)); parts.push(s, 1, off, ibSp.count, null); off += NV; }
   };
   for (const s of order) { const c = s.captive; if (c && c.state === 'caught' && !c.dead && c.e > 0.001) emit(c); emit(s); }
-  if (!off) return;
-  gl.bufferData(gl.ARRAY_BUFFER, spAll.subarray(0, off * 6), gl.DYNAMIC_DRAW);
+  if (!off) { propsUpTo(Infinity, false); return; }
   let cur = null, faceOn = -1, ibCur = null;
   for (let i = 0; i < parts.length; i += 5) {
-    const s = parts[i]; if (s !== cur) { cur = s; sprBB(s); gl.uniform4f(USP.uBB, BBA[0], BBA[1], BBA[2], BBA[3]); gl.uniform1f(USP.uBK, BBA[4]); s.setUniforms(); faceOn = -1; }
+    const s = parts[i]; if (s !== cur) { if (pj < pq.length && pq[pj].by <= s.y) { propsUpTo(s.y, true); ibCur = null; }
+      if (i === 0 || !cur) gl.bufferData(gl.ARRAY_BUFFER, spAll.subarray(0, off * 6), gl.DYNAMIC_DRAW);
+      cur = s; sprBB(s); gl.uniform4f(USP.uBB, BBA[0], BBA[1], BBA[2], BBA[3]); gl.uniform1f(USP.uBK, BBA[4]); s.setUniforms(); faceOn = -1; }
     if (parts[i + 1] !== faceOn) { faceOn = parts[i + 1]; gl.uniform1f(USP.uFaceOn, faceOn); }
     const o = parts[i + 2] * 24; gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 24, o); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 24, o + 8); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 24, o + 16);
     const ib = parts[i + 4] || ibSp; if (ib !== ibCur) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); ibCur = ib; }
     gl.drawElements(gl.TRIANGLES, parts[i + 3], gl.UNSIGNED_SHORT, 0);
   }
+  propsUpTo(Infinity, false);
 }
 
 // ---------- sound (synthesized) ----------
@@ -1679,6 +1707,123 @@ function arriveBeach() { // everyone jumps for joy on the sand
   Snd.chimes([1046.5, 1318.5, 1568, 2093], 0.07, 0.07);
 }
 
+// ---------- beach props: shells, a bucket, a star jar and a sand castle; one more step for each letter friend on the beach (4 = all) ----------
+// where each picture sits in beach/props.webp
+const PATL = { w: 1024, h: 1024, r: { castle: [10, 10, 512, 503], jar: [532, 10, 276, 300], bucket: [10, 523, 269, 320], shell: [289, 523, 256, 124], starfish: [555, 523, 220, 133], star: [785, 523, 191, 178] } };
+// st: step it comes with; img (day) / nimg (night: a starfish turns into a glowing star); fx, fy: where on the tray (0 far .. 1 near);
+// h: height in sprite radii; tint: how much the night darkens it; emit: lit windows at night; glow: halo at night; snd: tap sound
+const PROPS = [
+  { st: 1, img: 'shell', fx: 0.17, fy: 0.87, h: 1.5, tint: 1, snd: 'shell' },
+  { st: 1, img: 'starfish', nimg: 'star', fx: 0.86, fy: 0.55, h: 1.25, tint: 1, glow: 1, snd: 'star' },
+  { st: 2, img: 'bucket', fx: 0.1, fy: 0.55, h: 3.0, tint: 1, snd: 'bucket' },
+  { st: 2, img: 'starfish', nimg: 'star', fx: 0.33, fy: 0.96, h: 1.1, tint: 1, glow: 1, snd: 'star' },
+  { st: 3, img: 'jar', fx: 0.19, fy: 0.27, h: 2.7, tint: 0.3, glow: 1.5, snd: 'jar' },
+  { st: 4, img: 'castle', fx: 0.86, fy: 0.3, h: 7.0, tint: 1, emit: 1, snd: 'castle' },
+].map((p, i) => Object.assign({ i, k: 0, wig: 0, ph: i * 1.7, rect: null }, p));
+const PROP_STEPS = 4;
+const Props = { st: 0, wait: 0, rain: 0 };
+const propWorld = p => [TX + (p.fxA ?? p.fx) * TW, TY + (p.fyA ?? p.fy) * TH];
+// keep every prop clear of the toolbar and the colours (they sit in different places on iPad, phone portrait and landscape)
+let propLay = '';
+function placeProps() {
+  const key = `${W}x${H}`; if (propLay === key || BV < 0.999) return; propLay = key;
+  const rs = ['#tools', '#palette'].map(q => $(q).getBoundingClientRect()).filter(r => r.width > 0);
+  for (const p of PROPS) { let fx = p.fx, fy = p.fy;
+    for (let k = 0; k < 40; k++) {
+      PJ(TX + fx * TW, TY + fy * TH); const r0 = PATL.r[p.img], hh = p.h * baseR * PK * SB(), ww = hh * r0[2] / r0[3];
+      const b = [PX - ww / 2 - 8, PY - hh, PX + ww / 2 + 8, PY + 8];
+      if (b[0] < 4) { fx += 0.02; continue; } if (b[2] > W - 4) { fx -= 0.02; continue; }
+      const r = rs.find(r => b[0] < r.right && b[2] > r.left && b[1] < r.bottom && b[3] > r.top); if (!r) break;
+      if (r.height > r.width * 2) fx += r.left < W / 2 ? 0.02 : -0.02; else fy -= 0.025;
+    }
+    p.fxA = clamp(fx, 0.03, 0.97); p.fyA = Math.max(0.12, fy); }
+}
+function updateProps(dt) {
+  const want = Math.min(PROP_STEPS, letterCount()), live = Beach.tgt && Beach.v >= 1 && BV > 0.99;
+  if (!live) Props.st = want, Props.wait = 0;
+  else if (want !== Props.st) {   // on the beach: a new step pops in a moment after the new friend appears; collected friends take theirs away
+    Props.wait += dt;
+    const up = want > Props.st;
+    if (Props.wait > (up ? 0.8 : 0.25)) { Props.wait = 0; Props.st += up ? 1 : -1; if (up) propsUp(Props.st); else Snd.pop(420, 0.1); }
+  } else Props.wait = 0;
+  for (const p of PROPS) {
+    const on = Props.st >= p.st;
+    if (!live) p.k = on ? 1 : 0;
+    else if (on && p.k < 1) p.k = Math.min(1, p.k + dt / 0.6);
+    else if (!on && p.k > 0) p.k = Math.max(0, p.k - dt / 0.35);
+    if (p.wig > 0) p.wig = Math.max(0, p.wig - dt);
+  }
+  const rw = Props.st >= PROP_STEPS ? 1 : 0; Props.rain += (live ? Math.sign(rw - Props.rain) * dt / 1.6 : rw - Props.rain); Props.rain = clamp(Props.rain, 0, 1);
+}
+function propsUp(st) {   // a new step on the beach: chimes and a sparkle where each new thing appears
+  Snd.chimes(st >= PROP_STEPS ? [1046.5, 1318.5, 1568, 2093, 2637] : [1318.5, 1568, 2093], 0.07, 0.09);
+  for (const p of PROPS) if (p.st === st) { const [x, y] = propWorld(p); sparks(x, y, 12, baseR * 1.2, '#fff3b0'); ringP(x, y, baseR * 2.2); }
+}
+const easeBack = t => { const c = 1.9; t -= 1; return 1 + (c + 1) * t * t * t + c * t * t; };
+// the props in view, far to near, with the screen quad of each (the starfish fades into the glowing star as night falls)
+function propsToDraw() {
+  const out = []; if (!BV || Beach.ov <= 0.01) return out;
+  placeProps();
+  const nt = Math.max(night, nightBoost);
+  for (const p of PROPS) { if (p.k <= 0) continue;
+    const [bx, by] = propWorld(p); PJ(bx, by); const K = PK * SB(), sc = p.k < 1 ? easeBack(p.k) : 1, a = Math.min(1, p.k * 2.5) * Beach.ov;
+    const imgs = p.nimg ? [[p.img, a * (1 - nt), p.tint], [p.nimg, a * nt, 0]] : [[p.img, a, p.tint]];
+    const r0 = PATL.r[p.img], hh = p.h * baseR * K * sc, ww = hh * r0[2] / r0[3];
+    const wg = p.wig > 0 ? Math.sin(p.wig * 30) * 0.16 * p.wig / 0.6 : 0;
+    p.rect = [PX - ww / 2, PY - hh, PX + ww / 2, PY]; p.hh = hh;
+    out.push({ p, bx, by, sx: PX, sy: PY, K, sc, a, sr: p.h * baseR * sc * (r0[2] / r0[3]) * 0.42, imgs: imgs.filter(m => m[1] > 0.004), wg, v0: 0, vn: 0 });
+  }
+  return out.sort((a, b) => a.by - b.by);
+}
+let prBuf = new Float32Array(16 * 6 * 8);
+function propVerts(pq) {
+  let n = 0; const need = pq.length * 2 * 6 * 8; if (prBuf.length < need) prBuf = new Float32Array(need);
+  for (const q of pq) { q.v0 = n / 8;
+    for (const [img, a, tint] of q.imgs) { const r = PATL.r[img], r0 = PATL.r[q.p.img], hh = q.p.h * baseR * q.K * q.sc * (img === q.p.img ? 1 : r[3] / r0[3] * r0[2] / r[2] * 1.15);
+      const ww = hh * r[2] / r[3], squash = 1 + Math.sin(q.p.wig * 30) * 0.06 * q.p.wig, cs = Math.cos(q.wg), sn = Math.sin(q.wg);
+      const u0 = r[0] / PATL.w, v0 = r[1] / PATL.h, u1 = (r[0] + r[2]) / PATL.w, v1 = (r[1] + r[3]) / PATL.h, em = q.p.emit || 0;
+      const C = [[-0.5, -1, u0, v0], [0.5, -1, u1, v0], [0.5, 0, u1, v1], [-0.5, -1, u0, v0], [0.5, 0, u1, v1], [-0.5, 0, u0, v1]];
+      for (const [cx, cy, u, v] of C) { const lx = cx * ww * squash, ly = cy * hh / squash;
+        prBuf[n++] = q.sx + lx * cs - ly * sn; prBuf[n++] = q.sy + lx * sn + ly * cs; prBuf[n++] = u; prBuf[n++] = v; prBuf[n++] = a; prBuf[n++] = tint; prBuf[n++] = em; prBuf[n++] = 0; } }
+    q.vn = n / 8 - q.v0; }
+  return prBuf.subarray(0, n);
+}
+function hitProp(X, Y) {
+  if (!BV || Beach.ov < 0.9) return null; let best = null;
+  for (const p of PROPS) { if (p.k < 0.6 || !p.rect) continue; const [x0, y0, x1, y1] = p.rect, padX = Math.max(0, 22 - (x1 - x0) / 2), padY = Math.max(0, 30 - (y1 - y0));
+    if (X > x0 - padX && X < x1 + padX && Y > y0 - padY + (y1 - y0) * 0.08 && Y < y1 + 8 && (!best || p.rect[3] > best.rect[3])) best = p; }
+  return best;
+}
+function tapProp(p) {
+  p.wig = 0.6; const [x, y] = propWorld(p);
+  const nt = night > 0.5;
+  ({ shell: () => Snd.chimes([1568, 2093, 2637], 0.05, 0.08), star: () => nt ? Snd.chimes([2093, 2637, 3136], 0.05, 0.08) : Snd.plip(), bucket: () => { Snd.pop(380, 0.2); Snd.pop(520, 0.12); },
+     jar: () => Snd.chimes([1318.5, 1760, 2349, 2637], 0.06, 0.08), castle: () => Snd.chimes([784, 1046.5, 1318.5, 1568], 0.08, 0.1) })[p.snd]();
+  sparks(x, y, p.snd === 'castle' ? 10 : 6, baseR * (p.snd === 'castle' ? 1.6 : 0.8), nt || p.glow ? '#fff3b0' : null);
+}
+// night halos around the glowing props, and the rainbow in the sky once everything is out (2D, over the picture)
+function drawPropsFx(c) {
+  if (!BV || Beach.ov <= 0.01) return;
+  const nt = Math.max(night, nightBoost);
+  if (nt > 0.02) { c.save(); c.globalCompositeOperation = 'lighter';
+    for (const p of PROPS) { if (!p.glow || p.k <= 0 || !p.rect) continue;
+      const [x0, y0, x1, y1] = p.rect, cx = (x0 + x1) / 2, cy = y0 + (y1 - y0) * 0.55, R = Math.max(x1 - x0, y1 - y0) * 0.95 * p.glow;
+      const a = nt * Math.min(1, p.k * 2) * Beach.ov * (0.26 + 0.07 * Math.sin(T * 2.2 + p.ph));
+      const g = c.createRadialGradient(cx, cy, 0, cx, cy, R); g.addColorStop(0, `rgba(255,214,120,${a.toFixed(3)})`); g.addColorStop(0.45, `rgba(255,190,90,${(a * 0.4).toFixed(3)})`); g.addColorStop(1, 'rgba(255,170,60,0)');
+      c.fillStyle = g; c.fillRect(cx - R, cy - R, R * 2, R * 2); }
+    c.restore(); }
+  if (Props.rain > 0.01) {   // a soft rainbow arcing over the sea (fades out towards the horizon)
+    const [ix, iy, iw, ih] = CAM.img, hY = iy + PIC.hor * ih, R = Math.min(iw * 0.3, (hY - Math.max(0, iy)) * 0.95), cx = ix + iw * 0.56, cy = hY + R * 0.12, bw = R * 0.16;
+    if (R > 40) { c.save(); c.beginPath(); c.rect(0, 0, W, hY); c.clip();
+      const g = c.createRadialGradient(cx, cy, R - bw, cx, cy, R + bw), al = Props.rain * Beach.ov * (0.42 - 0.2 * nt);
+      [[0, 'rgba(150,90,255,0)'], [0.18, 'rgba(150,90,255,1)'], [0.34, 'rgba(70,140,255,1)'], [0.5, 'rgba(80,220,120,1)'], [0.66, 'rgba(255,235,80,1)'], [0.82, 'rgba(255,90,80,1)'], [1, 'rgba(255,90,80,0)']].forEach(([o, col]) => g.addColorStop(o, col));
+      c.globalAlpha = al; c.strokeStyle = g; c.lineWidth = bw * 2; c.beginPath(); c.arc(cx, cy, R, Math.PI, 2 * Math.PI); c.stroke();
+      // fade the feet into the sea haze
+      c.globalCompositeOperation = 'destination-out'; c.globalAlpha = 1; const f = c.createLinearGradient(0, hY - R * 0.55, 0, hY); f.addColorStop(0, 'rgba(0,0,0,0)'); f.addColorStop(1, 'rgba(0,0,0,0.95)');
+      c.fillStyle = f; c.fillRect(cx - R - bw, hY - R * 0.55, (R + bw) * 2, R * 0.55); c.restore(); }
+  }
+}
+
 // ---------- beach video: day and night loops, a sunset or sunrise film in between ----------
 // HEVC files are about half the size; browsers that can't play HEVC (or fail to) get the H.264 ones
 let vidHevc = (() => { try { return document.createElement('video').canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') !== ''; } catch (e) { return false; } })();
@@ -2314,7 +2459,8 @@ function onDown(e) {
   const sx = e.clientX, sy = e.clientY, t = performance.now(), [x, y] = UNPJ(sx, sy);
   const p = { id: e.pointerId, x, y, sx, sy, sx0: sx, sy0: sy, lx: x, ly: y, t0: t, hist: [{ x, y, t }], sh: [{ x: sx, y: sy, t: e.timeStamp || t }], mode: 'sand', s: null, moved: false, still: 0, whirlDone: false, dist: 0, speed: 0, wx: x, wy: y, wstr: 0, path: [{ x, y }], plen: 0 };
   if (hitMagic(x, y)) { p.mode = 'none'; ptrs.set(e.pointerId, p); return; }
-  const s = nearStroke(x, y) ? null : hitSprite(sx, sy);
+  const s = nearStroke(x, y) ? null : hitSprite(sx, sy), pr = s || Trace.active ? null : hitProp(sx, sy);
+  if (pr) { tapProp(pr); p.mode = 'none'; ptrs.set(e.pointerId, p); return; }
   if (s) { if (s.state === 'peek') { s.reveal(); p.mode = 'none'; } else if (s.ptr) p.mode = 'none'; else { p.mode = 'sprite'; p.s = s; ptrW(p); p.hist[0].x = p.x; p.hist[0].y = p.y; s.grab(p); } }
   else if (Trace.active) traceMove(x, y, x, y);
   ptrs.set(e.pointerId, p);
@@ -2587,6 +2733,7 @@ function drawSpiral(c, x, y, R, str, rot) {
 }
 function drawFx() {
   const c = ctx; c.setTransform(RS, 0, 0, RS, 0, 0); c.clearRect(0, 0, W, H);
+  drawPropsFx(c);
   drawTrails(c, lastDt);
   drawTrace(c);
   for (const s of sprites) if (s.e < 0.999 && s.e > 0.02 && !s.popped && !s.isLetter) { if (BV) setSprMap(c, s); s.drawLip(c); }
@@ -2606,7 +2753,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const rawMs = now - last; let dt = rawMs / 1000; last = now; perfTick(rawMs); if (dt > 0.05) dt = 0.05; if (dt <= 0) return; T += dt;
   const pf = PROF.on; let q0 = pf ? performance.now() : 0; const mark = pf ? k => { const q = performance.now(); PROF.acc[k] = (PROF.acc[k] || 0) + q - q0; PROF.mx[k] = Math.max(PROF.mx[k] || 0, q - q0); q0 = q; } : null;
-  updateBeach(dt); updBusy(); updatePointers(dt); updateWhirls(dt); updateWave(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
+  updateBeach(dt); updateProps(dt); updBusy(); updatePointers(dt); updateWhirls(dt); updateWave(dt); updateTrace(dt); updateMagic(dt); lastDt = dt;
   if (pf) mark('misc');
   for (const s of sprites) s.update(dt);
   if (pf) mark('sprites');
@@ -2655,7 +2802,7 @@ if (initGL()) {
   for (const id of Book.data.f.slice()) if (GLYPHS[id]) { const p = randSpot(); spawnFriend(id, p.x, p.y, false); }
   requestAnimationFrame(t => { last = t; requestAnimationFrame(loop); });
 }
-window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, BVID, get night() { return night; }, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
+window.__game = { PROF, get RS() { return RS; }, get Q() { return Q; }, setQuality, get P() { return P; }, launchFirework, confetti, emojiPop, finishTrace() { if (!Trace.active) return; for (const st of Trace.strokes) { st.done = true; for (const p of st.pts) p.lit = true; } Trace.si = Trace.strokes.length - 1; complete(); }, get sprites() { return sprites; }, spawnAt, startWave, get T() { return T; }, Trace, startTrace, Book, spawnFriend, get magic() { return magic; }, set magicTimer(v) { magicTimer = v; }, Beach, enterBeach, leaveBeach, BVID, Props, PROPS, hitProp, get night() { return night; }, get BV() { return BV; }, proj(x, y) { PJ(x, y); return [PX, PY, PK]; }, hit(X, Y) { const s = hitSprite(X, Y); return s ? (s.isLetter ? s.id : s.mat) : null; }, sprScr(s) { sprBB(s); return [BBA[2], BBA[3], BBA[4]]; } };
 try { if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 })();
 </script>

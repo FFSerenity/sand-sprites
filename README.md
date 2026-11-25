@@ -23,6 +23,7 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 - After each letter or number the sand tray tilts back and fades into a rainbow beach in front of the sea. The beach is a looping video (real waves washing up the sand); the sprites stand on its sand and her letter stays carved in it.
 - Everything still works there: tap, squish, drag and fling the sprites (flick up to toss them into the sky), summon new ones, swirl. Drawing and painting in the sand leaves marks on the beach.
 - Sprites close to the water run away when a wave comes in (timed to the waves in the video). **🌊 Smooth** sends one big sea wave over the beach and washes her marks away.
+- The beach fills up with her letter friends: with 1 friend on the beach a shell and a starfish appear, with 2 a bucket and spade and another starfish, with 3 a jar with a star in it, with 4 a sand castle and a rainbow over the sea. At night the starfish turn into glowing stars, the jar glows and the castle's windows light up. Tap them. Collecting the letters into the book clears the beach again.
 - **🌙 Night** plays a sunset film: the sun sinks into the sea, then the moon rises over the waterfall, and the beach becomes a moonlit night loop. **☀️ Day** plays the sunrise.
 - **🏠 Home** (top centre) goes back to the sand tray. ✏️ Write, a tile in the 📖 book, or the beach's own Home button all bring her back to the tray first.
 
@@ -40,7 +41,7 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 | 🌈 Rainbow | star | glossy flowing rainbow; **drag it onto any sprite to give it a new colour** (a different one each touch) and it paints rainbow trails in the sand |
 
 Sprites are soft bodies (a ring of springs keeping shape, volume and curvature) rendered with WebGL shaders.
-All sprites, effects and sounds are generated in code. The beach background is made of video loops and films in `beach/` (generated with Wan 2.2 from painted keyframes, with first/last-frame segments joined so they loop without a seam). Each video comes as HEVC (`-hevc.mp4`, about half the size, used on iPad/Safari and other browsers that can play it) and H.264 (the fallback). The beach is the same tray seen through a tilted camera (a projective map of the tray plane laid on the picture's sand, vanishing at its horizon), so sprites and the sand keep working unchanged; sprites are drawn upright around the point they stand on.
+All sprites, effects and sounds are generated in code. The beach background is made of video loops and films in `beach/` (generated with Wan 2.2 from painted keyframes, with first/last-frame segments joined so they loop without a seam). The props on the sand (`beach/props.webp`, with `props_e.png` marking the windows that light up at night) are cut out of the concept painting for now. Each video comes as HEVC (`-hevc.mp4`, about half the size, used on iPad/Safari and other browsers that can play it) and H.264 (the fallback). The beach is the same tray seen through a tilted camera (a projective map of the tray plane laid on the picture's sand, vanishing at its horizon), so sprites and the sand keep working unchanged; sprites are drawn upright around the point they stand on.
 
 ## Install on iPad
 Open the link in **Safari** → Share → **Add to Home Screen**. It runs full-screen and works offline after the first visit.
