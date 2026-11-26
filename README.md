@@ -20,6 +20,23 @@ A rainbow sand-tray game for little kids, made for iPad and touch screens.
 - While she writes, the sand is fresh: earlier letters and scribbles fade away when a letter starts and fade back in (with the new letter carved in) when she comes back from the beach or stops writing. **🌊 Smooth** while writing clears them for good.
 - Finishing a stroke plays a chime and the helper sprite cheers. Finishing the whole character reads it aloud in English ("Bee! Bee is for Bear!" with 🐻, or counts "One, two, three!" for numbers), praises her, and **the camera tilts down to the beach**.
 
+## Symbols mode (no letters, no speech)
+The same game has a second mode for everyone else: **https://ffserenity.github.io/sand-sprites/?mode=symbols**. This is also the version built for YouTube Playables (below).
+- Instead of ABC & 123 there are **20 magic symbols** to draw, easiest first: ○ bubble, ～ wave, ♡ heart, ↯ lightning, 🌀 spiral, 💧 drop, ⌒ rainbow (one stroke), then ☆ star, ☽ moon, ∞ infinity, ✦ sparkle, ☁ cloud, and finally the ones with more strokes or more turns: ♪ note, 🍃 leaf, ✿ flower, ☀ sun, 🐚 shell, ⛵ boat, 🐟 fish, 🔥 flame.
+- **🪄 Draw** suggests the next symbol she hasn't drawn yet, easiest first. Tracing works exactly like the letters (guiding star, strokes in order).
+- Each finished symbol **does its magic** with its own sound (no words): bubbles rise, a wave rolls across, hearts float up, lightning strikes, the sand whirls, a drop ripples, a rainbow arches over, a shooting star lands, the sky goes dark for the moon, two lights loop an ∞, glitter fills the screen, a cloud rains glowing drops, notes play a tune, leaves fall, flowers bloom, the sun glows, the shell sings like the sea, a boat sails across the sand (leaving its wake), fish jump out of the sand, a flame flickers. Then the symbol becomes a gummy **symbol sprite**; tapping one does a small version of its magic.
+- The **📖 book** collects symbol sprites: 20 tiles, pale outlines until collected; tap a tile to draw that symbol. Collecting all 20 is celebrated with confetti and fireworks, and the book gets a gold frame.
+- The beach rewards are the same: 4 symbol sprites on the beach bring the full beach.
+- Symbols mode keeps its own book (`sandSpritesSymbols`), separate from the letters book.
+
+## YouTube Playables build
+`python3 tools/build_playables.py` writes `dist/playables/` and `dist/sand-sprites-playables.zip` (about 14 MB): symbols mode, the H.264 videos only, no service worker or home-screen manifest. `index.html` loads the Playables SDK before anything else, then `playables/playables.js`, which joins the game to it:
+- the game starts once `loadData()` has returned; the book and the music setting are kept with `saveData()` (a moment after each change, and straight away when YouTube pauses the game) instead of this device's storage;
+- `firstFrameReady()` on the first frame, `gameReady()` right after (the title screen with its Play button is the main menu);
+- YouTube's mute (`isAudioEnabled` / `onAudioEnabledChange`) silences everything; the in-game 🔊 button is hidden there, the 🎵 music switch stays;
+- `onPause` stops the game loop, the sound and the videos until `onResume` (the page-visibility events aren't used there);
+- Esc closes the book or stops a drawing.
+
 ## The beach
 - After each letter or number the sand tray tilts back and fades into a rainbow beach in front of the sea. The beach is a looping video (real waves washing up the sand); the sprites stand on its sand and her letter stays carved in it.
 - Everything still works there: tap, squish, drag and fling the sprites (flick up to toss them into the sky), summon new ones, swirl. Drawing and painting in the sand leaves marks on the beach.
